@@ -19,7 +19,10 @@ maintainers = [
 urls.Documentation = "https://oor_benchmark.readthedocs.io/"
 urls.Source = "https://github.com/emdann/oor_benchmark"
 urls.Home-page = "https://github.com/emdann/oor_benchmark"
-dependencies = ["anndata"]
+dependencies = [
+    "anndata",
+    "scanpy"
+    ]
 
 [project.optional-dependencies]
 dev = [

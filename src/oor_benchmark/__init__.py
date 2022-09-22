@@ -1,7 +1,7 @@
 from importlib.metadata import version
 
-from . import pl, pp, tl
+from . import api, datasets, methods, metrics
 
-__all__ = ["pl", "pp", "tl"]
+__all__ = ["datasets", "metrics", "methods"]
 
 __version__ = version("oor_benchmark")
