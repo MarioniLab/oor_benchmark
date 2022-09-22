@@ -5,10 +5,19 @@ from anndata import AnnData
 
 def check_dataset(adata: AnnData):
     """Check that dataset output fits expected API."""
+    assert "dataset_group" in adata.obs
+    assert "OOR_state" in adata.obs
+    return True
 
 
 def check_method(adata: AnnData):
     """Check that method output fits expected API."""
+    assert "OOR_state" in adata.obs
+    assert "sample_adata" in adata.uns
+    assert "query_enrichment_score" in adata.uns["sample_adata"].obs
+    assert "query_enrichment_signif" in adata.uns["sample_adata"].obs
+    assert "groups" in adata.uns["sample_adata"].varm
+    return True
 
 
 def sample_dataset():

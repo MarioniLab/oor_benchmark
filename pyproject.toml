@@ -21,7 +21,8 @@ urls.Source = "https://github.com/emdann/oor_benchmark"
 urls.Home-page = "https://github.com/emdann/oor_benchmark"
 dependencies = [
     "anndata",
-    "scanpy"
+    "scanpy",
+    "scvi-tools"
     ]
 
 [project.optional-dependencies]
