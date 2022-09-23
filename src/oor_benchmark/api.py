@@ -9,6 +9,7 @@ def check_dataset(adata: AnnData):
     assert "dataset_group" in adata.obs
     assert "OOR_state" in adata.obs
     assert "sample_id" in adata.obs
+    assert "cell_annotation" in adata.obs
     assert all(adata.obs.loc[adata.obs["OOR_state"] == 1, "dataset_group"] == "query")
     return True
 
@@ -40,4 +41,5 @@ def sample_dataset():
     adata.obs["OOR_state"] = np.where(adata.obs["louvain"] == "B cells", 1, 0)
     remove_cells = adata.obs_names[(adata.obs["OOR_state"] == 1) & (adata.obs["dataset_group"] != "query")]
     adata = adata[~adata.obs_names.isin(remove_cells)].copy()
+    adata.obs["cell_annotation"] = adata.obs["louvain"].copy()
     return adata

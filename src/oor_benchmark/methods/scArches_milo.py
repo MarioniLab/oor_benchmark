@@ -1,6 +1,8 @@
 import anndata
 import milopy
+import numpy as np
 import scanpy as sc
+import scvi
 from anndata import AnnData
 
 from ._latent_embedding import embedding_scArches
@@ -11,7 +13,7 @@ def run_milo(
     query_group: str,
     reference_group: str,
     sample_col: str = "sample_id",
-    annotation_col: str = "cell_type",
+    annotation_col: str = "cell_annotation",
     design: str = "~ is_query",
 ):
     """Test differential abundance analysis on neighbourhoods with Milo.
@@ -43,8 +45,9 @@ def scArches_milo(
     embedding_reference: str = "atlas",
     diff_reference: str = "ctrl",
     sample_col: str = "sample_id",
-    annotation_col: str = "cell_type",
+    annotation_col: str = "cell_annotation",
     signif_alpha: float = 0.1,
+    outdir: str = None,
     **kwargs,
 ):
     r"""Worflow for OOR state detection with scArches embedding and Milo differential analysis.
@@ -52,7 +55,8 @@ def scArches_milo(
     Parameters:
     ------------
     adata: AnnData
-        AnnData object of disease and reference cells to compare
+        AnnData object of disease and reference cells to compare.
+        If `adata.obsm['X_scVI']` is already present, the embedding step is skipped
     embedding_reference: str
         Name of reference group in adata.obs['dataset_group'] to use for latent embedding
     diff_reference: str
@@ -63,6 +67,8 @@ def scArches_milo(
         Name of column in adata.obs to use as annotation
     signif_alpha: float
         FDR threshold for differential abundance analysi (default: 0.1)
+    outdir: str
+        path to output directory (default: None)
     \**kwargs:
         extra arguments to embedding_scArches
     """
@@ -76,7 +82,18 @@ def scArches_milo(
     if "X_scVI" in adata_ref.obsm and "X_scVI" in adata_query.obsm:
         adata_merge = anndata.concat([adata_query, adata_ref])
     else:
-        adata_merge = embedding_scArches(adata_ref, adata_query, **kwargs)
+        if outdir is not None:
+            try:
+                vae_ref = scvi.model.SCVI.load(outdir + f"/model_{embedding_reference}/")
+                vae_q = scvi.model.SCVI.load(outdir + f"/model_fit_query2{embedding_reference}/")
+                adata_merge = anndata.concat([adata_query, adata_ref])
+                adata_merge.obsm["X_scVI"] = np.vstack(
+                    [vae_q.get_latent_representation(), vae_ref.get_latent_representation()]
+                )
+            except FileNotFoundError:
+                adata_merge = embedding_scArches(adata_ref, adata_query, outdir=outdir, **kwargs)
+        else:
+            adata_merge = embedding_scArches(adata_ref, adata_query, **kwargs)
 
     # remove embedding_reference from anndata if not needed anymore
     if diff_reference != embedding_reference:
