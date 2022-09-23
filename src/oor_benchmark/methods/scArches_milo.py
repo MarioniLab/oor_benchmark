@@ -44,6 +44,7 @@ def scArches_milo(
     diff_reference: str = "ctrl",
     sample_col: str = "sample_id",
     annotation_col: str = "cell_type",
+    signif_alpha: float = 0.1,
     **kwargs,
 ):
     r"""Worflow for OOR state detection with scArches embedding and Milo differential analysis.
@@ -60,6 +61,8 @@ def scArches_milo(
         Name of column in adata.obs to use as sample ID
     annotation_col: str
         Name of column in adata.obs to use as annotation
+    signif_alpha: float
+        FDR threshold for differential abundance analysi (default: 0.1)
     \**kwargs:
         extra arguments to embedding_scArches
     """
@@ -90,7 +93,7 @@ def scArches_milo(
     sample_adata = adata_merge.uns["nhood_adata"].T.copy()
     sample_adata.var["OOR_score"] = sample_adata.var["logFC"].copy()
     sample_adata.var["OOR_signif"] = (
-        ((sample_adata.var["SpatialFDR"] < 0.1) & (sample_adata.var["logFC"] > 0)).astype(int).copy()
+        ((sample_adata.var["SpatialFDR"] < signif_alpha) & (sample_adata.var["logFC"] > 0)).astype(int).copy()
     )
     sample_adata.varm["groups"] = adata_merge.obsm["nhoods"].T
     adata_merge.uns["sample_adata"] = sample_adata.copy()

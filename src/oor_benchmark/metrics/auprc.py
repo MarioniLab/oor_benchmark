@@ -34,8 +34,10 @@ def auprc(adata: AnnData, return_curve: bool = False) -> DataFrame:
     AUC = auc(recall, precision)
     if return_curve:
         AUPRC_df = pd.DataFrame(np.vstack([recall, precision]), index=["Recall", "Precision"]).T
+        AUPRC_df["AUPRC"] = AUC
+        AUPRC_df["no_skill_thresh"] = no_skill
     else:
         AUPRC_df = pd.DataFrame(index=["AUPRC", "no_skill_thresh"]).T
-    AUPRC_df.loc[0, "AUPRC"] = AUC
-    AUPRC_df.loc[0, "no_skill_thresh"] = no_skill
+        AUPRC_df.loc[0, "AUPRC"] = AUC
+        AUPRC_df.loc[0, "no_skill_thresh"] = no_skill
     return AUPRC_df
