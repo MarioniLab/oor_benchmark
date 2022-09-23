@@ -89,7 +89,9 @@ def scArches_milo(
     # Harmonize output
     sample_adata = adata_merge.uns["nhood_adata"].T.copy()
     sample_adata.var["OOR_score"] = sample_adata.var["logFC"].copy()
-    sample_adata.var["OOR_signif"] = (sample_adata.var["SpatialFDR"] < 0.1).astype(int).copy()
+    sample_adata.var["OOR_signif"] = (
+        ((sample_adata.var["SpatialFDR"] < 0.1) & (sample_adata.var["logFC"] > 0)).astype(int).copy()
+    )
     sample_adata.varm["groups"] = adata_merge.obsm["nhoods"].T
     adata_merge.uns["sample_adata"] = sample_adata.copy()
     return adata_merge

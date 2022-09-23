@@ -1,37 +1,34 @@
 # API
 
-## Preprocessing
+## Datasets
 
 ```{eval-rst}
-.. module:: oor_benchmark.pp
+.. module:: oor_benchmark.datasets
 .. currentmodule:: oor_benchmark
 
 .. autosummary::
     :toctree: generated
-
-    pp.basic_preproc
 ```
 
-## Tools
+## Methods
 
 ```{eval-rst}
-.. module:: oor_benchmark.tl
+.. module:: oor_benchmark.methods
 .. currentmodule:: oor_benchmark
 
 .. autosummary::
     :toctree: generated
 
-    tl.basic_tool
+    methods.scArches_milo
 ```
 
-## Plotting
+## Metrics
 
 ```{eval-rst}
-.. module:: oor_benchmark.pl
+.. module:: oor_benchmark.metrics
 .. currentmodule:: oor_benchmark
 
 .. autosummary::
     :toctree: generated
 
-    pl.basic_plot
 ```
