@@ -1,6 +1,7 @@
 import numpy as np
 import scanpy as sc
 from anndata import AnnData
+from scipy.sparse import csc_matrix
 
 
 def check_dataset(adata: AnnData):
@@ -18,7 +19,9 @@ def check_method(adata: AnnData):
     assert "sample_adata" in adata.uns
     assert "OOR_score" in adata.uns["sample_adata"].var
     assert "OOR_signif" in adata.uns["sample_adata"].var
+    assert all(adata.uns["sample_adata"].var["OOR_signif"].isin([0, 1]))
     assert "groups" in adata.uns["sample_adata"].varm
+    assert isinstance(adata.uns["sample_adata"].varm["groups"], csc_matrix)
     return True
 
 
