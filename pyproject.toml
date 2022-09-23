@@ -2,6 +2,8 @@
 build-backend = "hatchling.build"
 requires = ["hatchling"]
 
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [project]
 name = "oor_benchmark"
@@ -22,7 +24,8 @@ urls.Home-page = "https://github.com/emdann/oor_benchmark"
 dependencies = [
     "anndata",
     "scanpy",
-    "scvi-tools"
+    "scvi-tools",
+    "milopy @ git+https://github.com/emdann/milopy.git@master",
     ]
 
 [project.optional-dependencies]

@@ -7,6 +7,8 @@ def check_dataset(adata: AnnData):
     """Check that dataset output fits expected API."""
     assert "dataset_group" in adata.obs
     assert "OOR_state" in adata.obs
+    assert "sample_id" in adata.obs
+    assert all(adata.obs.loc[adata.obs["OOR_state"] == 1, "dataset_group"] == "query")
     return True
 
 
@@ -14,8 +16,8 @@ def check_method(adata: AnnData):
     """Check that method output fits expected API."""
     assert "OOR_state" in adata.obs
     assert "sample_adata" in adata.uns
-    assert "query_enrichment_score" in adata.uns["sample_adata"].obs
-    assert "query_enrichment_signif" in adata.uns["sample_adata"].obs
+    assert "OOR_score" in adata.uns["sample_adata"].var
+    assert "OOR_signif" in adata.uns["sample_adata"].var
     assert "groups" in adata.uns["sample_adata"].varm
     return True
 
@@ -25,6 +27,14 @@ def sample_dataset():
     np.random.seed(3456)
     adata = sc.datasets.pbmc3k_processed()
     adata = adata.raw.to_adata()
-    adata.obs["dataset_group"] = np.random.choice(["atlas", "ctrl", "query"], p=[0.6, 0.2, 0.2], size=adata.shape[0])
+    # Split in samples and dataset group
+    adata.obs["sample_id"] = np.random.choice([f"S{n}" for n in range(16)], size=adata.n_obs)
+    adata.obs["dataset_group"] = np.nan
+    adata.obs.loc[adata.obs["sample_id"].isin([f"S{n}" for n in range(8)]), "dataset_group"] = "atlas"
+    adata.obs.loc[adata.obs["sample_id"].isin([f"S{n}" for n in range(8, 12)]), "dataset_group"] = "ctrl"
+    adata.obs.loc[adata.obs["sample_id"].isin([f"S{n}" for n in range(12, 16)]), "dataset_group"] = "query"
+    # Make out-of-reference cell state
     adata.obs["OOR_state"] = np.where(adata.obs["louvain"] == "B cells", 1, 0)
+    remove_cells = adata.obs_names[(adata.obs["OOR_state"] == 1) & (adata.obs["dataset_group"] != "query")]
+    adata = adata[~adata.obs_names.isin(remove_cells)].copy()
     return adata

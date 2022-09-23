@@ -1,3 +1,4 @@
+import anndata
 import milopy
 import scanpy as sc
 from anndata import AnnData
@@ -5,7 +6,7 @@ from anndata import AnnData
 from ._latent_embedding import embedding_scArches
 
 
-def _run_milo(
+def run_milo(
     adata_design: AnnData,
     query_group: str,
     reference_group: str,
@@ -68,7 +69,11 @@ def scArches_milo(
     else:
         adata_query = adata[adata.obs["dataset_group"] != embedding_reference].copy()
 
-    adata_merge = embedding_scArches(adata_ref, adata_query, **kwargs)
+    # for testing (remove later?)
+    if "X_scVI" in adata_ref.obsm and "X_scVI" in adata_query.obsm:
+        adata_merge = anndata.concat([adata_query, adata_ref])
+    else:
+        adata_merge = embedding_scArches(adata_ref, adata_query, **kwargs)
 
     # remove embedding_reference from anndata if not needed anymore
     if diff_reference != embedding_reference:
@@ -79,7 +84,14 @@ def scArches_milo(
     n_querys = adata_merge[adata_merge.obs["dataset_group"] == "query"].obs[sample_col].unique().shape[0]
     sc.pp.neighbors(adata_merge, use_rep="X_scVI", n_neighbors=(n_controls + n_querys) * 5)
 
-    _run_milo(adata_merge, "query", diff_reference, sample_col=sample_col, annotation_col=annotation_col)
+    run_milo(adata_merge, "query", diff_reference, sample_col=sample_col, annotation_col=annotation_col)
+
+    # Harmonize output
+    sample_adata = adata_merge.uns["nhood_adata"].T.copy()
+    sample_adata.var["OOR_score"] = sample_adata.var["logFC"].copy()
+    sample_adata.var["OOR_signif"] = (sample_adata.var["SpatialFDR"] < 0.1).astype(int).copy()
+    sample_adata.varm["groups"] = adata_merge.obsm["nhoods"].T
+    adata_merge.uns["sample_adata"] = sample_adata.copy()
     return adata_merge
 
 
