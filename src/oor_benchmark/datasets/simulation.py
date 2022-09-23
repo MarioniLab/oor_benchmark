@@ -18,7 +18,7 @@ def _split_train_test(adata: AnnData, annotation_col: str = "leiden", test_frac:
 
 def simulate_query_reference(
     adata: AnnData,
-    batch_obs: str = None,
+    batch_col: str = None,
     query_batch: List[str] = None,
     ctrl_batch: List[str] = None,
     annotation_col: str = "leiden",
@@ -38,7 +38,7 @@ def simulate_query_reference(
     ------------
     adata: AnnData
         Single-cell dataset to be split in atlas, control and query datasets.
-    batch_obs:
+    batch_col:
         column in adata.obs containing sample identity (should correspond to samples used in differential analysis)
         (default: None, cells are split at random)
     query_batch:
@@ -57,7 +57,7 @@ def simulate_query_reference(
         if equal to 'depletion' a fraction of the cells in population specified in query_annotation
         will be removed from the samples in query_batch (the fraction specified by DA_test)
     test_frac:
-        fraction of cells in each population to be included in the query group (only used if batch_obs is None)
+        fraction of cells in each population to be included in the query group (only used if batch_col is None)
     DA_frac:
         the fraction of cells of query_annotation to keep in control if perturbation_type is 'expansion', or in query if perturbation_type is 'depletion'
     seed:
@@ -77,13 +77,13 @@ def simulate_query_reference(
         raise TypeError("A list of strings should be passed to ctrl_batch")
 
     # Split in query-control-reference
-    if batch_obs is not None:
+    if batch_col is not None:
         # split by defined batches
-        query = np.array([s in query_batch for s in adata.obs[batch_obs]])
+        query = np.array([s in query_batch for s in adata.obs[batch_col]])
         adata.obs["is_train"] = (~query).astype(int)
         adata.obs["is_test"] = query.astype("int")
         if ctrl_batch is not None:
-            ctrl = np.array([s in ctrl_batch for s in adata.obs[batch_obs]])
+            ctrl = np.array([s in ctrl_batch for s in adata.obs[batch_col]])
             adata.obs["is_ctrl"] = ctrl.astype("int")
             adata.obs["is_train"] = adata.obs["is_train"] - adata.obs["is_ctrl"]
     else:
@@ -105,7 +105,7 @@ def simulate_query_reference(
     elif perturbation_type == "expansion":
         for b in ctrl_batch:
             query_pop_cells = adata.obs_names[
-                (adata.obs[batch_obs] == b) & (adata.obs[annotation_col].isin(query_annotation))
+                (adata.obs[batch_col] == b) & (adata.obs[annotation_col].isin(query_annotation))
             ]
             cells2remove = np.random.choice(query_pop_cells, size=int(np.round(len(query_pop_cells) * (1 - DA_frac))))
             adata.obs.loc[cells2remove, "is_ctrl"] = 0
@@ -113,7 +113,7 @@ def simulate_query_reference(
     elif perturbation_type == "depletion":
         for b in query_batch:
             query_pop_cells = adata.obs_names[
-                (adata.obs[batch_obs] == b) & (adata.obs[annotation_col].isin(query_annotation))
+                (adata.obs[batch_col] == b) & (adata.obs[annotation_col].isin(query_annotation))
             ]
             cells2remove = np.random.choice(query_pop_cells, size=int(np.round(len(query_pop_cells) * (1 - DA_frac))))
             adata.obs.loc[cells2remove, "is_query"] = 0
@@ -122,7 +122,7 @@ def simulate_query_reference(
         raise ValueError("perturbation type should be one of 'remove' or 'perturb_pc'")
     adata.uns["perturbation"] = {
         "annotation_col": annotation_col,
-        "batch_obs": batch_obs,
+        "batch_col": batch_col,
         "query_annotation": query_annotation,
         "query_batch": query_batch,
         "ctrl_batch": ctrl_batch,
@@ -134,4 +134,9 @@ def simulate_query_reference(
     adata.obs["dataset_group"] = np.where(adata.obs["is_ctrl"] == 1, "ctrl", adata.obs["dataset_group"])
     adata.obs["dataset_group"] = np.where(adata.obs["is_train"] == 1, "atlas", adata.obs["dataset_group"])
     adata = adata[adata.obs["dataset_group"] != "exclude"].copy()  # remove cells that are not in any group
+
+    adata.obs["OOR_state"] = (adata.obs[annotation_col].isin(query_annotation)).astype(int)
+
+    adata.obs["cell_annotation"] = adata.obs[annotation_col].copy()
+    adata.obs["sample_id"] = adata.obs[batch_col].copy()
     return adata
