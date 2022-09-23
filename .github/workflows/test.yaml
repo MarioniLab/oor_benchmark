@@ -48,6 +48,9 @@ jobs:
             - name: Install dependencies
               run: |
                   pip install ".[dev,test]"
+            - name: Install R package dependencies
+              run: |
+                  Rscript --vanilla -e "install.packages(c('BiocManager', 'statmod'), repos='http://cran.us.r-project.org'); library('BiocManager'); BiocManager::install('edgeR')"
             - name: Test
               env:
                   MPLBACKEND: agg

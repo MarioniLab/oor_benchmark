@@ -27,9 +27,5 @@ def make_OOR_per_group(adata: AnnData, frac_perc: int = 20):
     adata.uns["sample_adata"].var["OOR_state_group"] = (frac_OOR_cells > OOR_thresh).astype("int")
 
 
-# def get_output_dataframe(adata: AnnData):
-#     pass
-
-
 def _get_sample_adata(adata: AnnData):
     return adata.uns["sample_adata"]
