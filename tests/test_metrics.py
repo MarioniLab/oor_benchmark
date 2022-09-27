@@ -30,3 +30,14 @@ def test_TPR_outputs(anndata_trained):
     assert (tpr_df.loc[0, "TPR"] >= 0.0) & (tpr_df.loc[0, "TPR"] <= 1.0)
     assert (tpr_df.loc[0, "FPR"] >= 0.0) & (tpr_df.loc[0, "FPR"] <= 1.0)
     assert (tpr_df.loc[0, "FDR"] >= 0.0) & (tpr_df.loc[0, "FDR"] <= 1.0)
+
+
+# @pytest.mark.skip(reason="This decorator should be removed when test passes.")
+
+
+def test_positives(anndata_trained):
+    """test that sum of TP and FP makes sense and TN and FN"""
+    adata_merge = anndata_trained.copy()
+    tpr_df = FDR_TPR_FPR(adata_merge)
+    assert tpr_df["TP"][0] + tpr_df["FP"][0] == adata_merge.uns["sample_adata"].var["OOR_signif"].sum()
+    assert tpr_df["TP"][0] + tpr_df["FN"][0] == adata_merge.uns["sample_adata"].var["OOR_state"].sum()

@@ -27,8 +27,8 @@ def FDR_TPR_FPR(adata: AnnData) -> DataFrame:
     out_df = out_df.astype(bool)
 
     out_df["TP"] = out_df["OOR_state_group"] & (out_df["OOR_signif"])
-    out_df["FP"] = out_df["OOR_state_group"] & (~out_df["OOR_signif"])
-    out_df["FN"] = (~out_df["OOR_state_group"]) & (out_df["OOR_signif"])
+    out_df["FN"] = out_df["OOR_state_group"] & (~out_df["OOR_signif"])
+    out_df["FP"] = (~out_df["OOR_state_group"]) & (out_df["OOR_signif"])
     out_df["TN"] = (~out_df["OOR_state_group"]) & (~out_df["OOR_signif"])
 
     tpr_df = pd.DataFrame(out_df[["TP", "FP", "FN", "TN"]].sum()).T
