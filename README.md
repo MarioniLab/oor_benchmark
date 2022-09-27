@@ -22,6 +22,19 @@ Python installed, we recommend installing [Miniconda](https://docs.conda.io/en/l
 
 There are several alternative options to install oor_benchmark:
 
+1. Set-up new conda environment
+
+```bash
+conda create --name oor-benchmark-env python=3.10
+conda activate oor-benchmark-env
+```
+
+2. Install R and R dependencies
+
+```bash
+conda install conda-forge::r-base==4.0.5 bioconda::bioconductor-edger==3.32.1 conda-forge::r-statmod==1.4.37
+```
+
 <!--
 1) Install the latest release of `oor_benchmark` from `PyPI <https://pypi.org/project/oor_benchmark/>`_:
 
@@ -30,10 +43,10 @@ pip install oor_benchmark
 ```
 -->
 
-1. Install the latest development version:
+3. Install the latest development version:
 
 ```bash
-pip install git+https://github.com/emdann/oor_benchmark.git@main
+pip install git+https://github.com/emdann/oor_benchmark.git@master
 ```
 
 ## Release notes

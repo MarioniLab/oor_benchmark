@@ -31,7 +31,7 @@ def run_milo(
     annotation_cols : str
         Name of column in adata_design.obs to use as annotation
     design : str
-        Design formula for differential abundance analysis
+        Design formula for differential abundance analysis (the test variable is always 'is_query')
     """
     milopy.core.make_nhoods(adata_design, prop=0.1)
     milopy.core.count_nhoods(adata_design, sample_col=sample_col)
@@ -48,6 +48,8 @@ def scArches_milo(
     annotation_col: str = "cell_annotation",
     signif_alpha: float = 0.1,
     outdir: str = None,
+    harmonize_output: bool = True,
+    milo_design: str = "~ is_query",
     **kwargs,
 ):
     r"""Worflow for OOR state detection with scArches embedding and Milo differential analysis.
@@ -69,6 +71,8 @@ def scArches_milo(
         FDR threshold for differential abundance analysi (default: 0.1)
     outdir: str
         path to output directory (default: None)
+    milo_design: str
+        design formula for differential abundance analysis (the test variable is always 'is_query')
     \**kwargs:
         extra arguments to embedding_scArches
     """
@@ -84,14 +88,16 @@ def scArches_milo(
     else:
         if outdir is not None:
             try:
+                # if os.path.exists(outdir + f"/model_{embedding_reference}/") and os.path.exists(outdir + f"/model_fit_query2{embedding_reference}/"):
                 vae_ref = scvi.model.SCVI.load(outdir + f"/model_{embedding_reference}/")
                 vae_q = scvi.model.SCVI.load(outdir + f"/model_fit_query2{embedding_reference}/")
-                adata_merge = anndata.concat([adata_query, adata_ref])
+                adata_merge = anndata.concat([vae_q.adata, vae_ref.adata])
                 adata_merge.obsm["X_scVI"] = np.vstack(
                     [vae_q.get_latent_representation(), vae_ref.get_latent_representation()]
                 )
-            except FileNotFoundError:
-                adata_merge = embedding_scArches(adata_ref, adata_query, outdir=outdir, **kwargs)
+            except (ValueError, FileNotFoundError):
+                # else:
+                adata_merge = embedding_scArches(adata_ref, adata_query, outdir=outdir, batch_key="sample_id", **kwargs)
         else:
             adata_merge = embedding_scArches(adata_ref, adata_query, **kwargs)
 
@@ -104,16 +110,19 @@ def scArches_milo(
     n_querys = adata_merge[adata_merge.obs["dataset_group"] == "query"].obs[sample_col].unique().shape[0]
     sc.pp.neighbors(adata_merge, use_rep="X_scVI", n_neighbors=(n_controls + n_querys) * 5)
 
-    run_milo(adata_merge, "query", diff_reference, sample_col=sample_col, annotation_col=annotation_col)
+    run_milo(
+        adata_merge, "query", diff_reference, sample_col=sample_col, annotation_col=annotation_col, design=milo_design
+    )
 
     # Harmonize output
-    sample_adata = adata_merge.uns["nhood_adata"].T.copy()
-    sample_adata.var["OOR_score"] = sample_adata.var["logFC"].copy()
-    sample_adata.var["OOR_signif"] = (
-        ((sample_adata.var["SpatialFDR"] < signif_alpha) & (sample_adata.var["logFC"] > 0)).astype(int).copy()
-    )
-    sample_adata.varm["groups"] = adata_merge.obsm["nhoods"].T
-    adata_merge.uns["sample_adata"] = sample_adata.copy()
+    if harmonize_output:
+        sample_adata = adata_merge.uns["nhood_adata"].T.copy()
+        sample_adata.var["OOR_score"] = sample_adata.var["logFC"].copy()
+        sample_adata.var["OOR_signif"] = (
+            ((sample_adata.var["SpatialFDR"] < signif_alpha) & (sample_adata.var["logFC"] > 0)).astype(int).copy()
+        )
+        sample_adata.varm["groups"] = adata_merge.obsm["nhoods"].T
+        adata_merge.uns["sample_adata"] = sample_adata.copy()
     return adata_merge
 
 

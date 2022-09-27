@@ -11,6 +11,7 @@ def check_dataset(adata: AnnData):
     assert "sample_id" in adata.obs
     assert "cell_annotation" in adata.obs
     assert all(adata.obs.loc[adata.obs["OOR_state"] == 1, "dataset_group"] == "query")
+    assert not _check_nonegative_integers_X(adata)
     return True
 
 
@@ -24,6 +25,14 @@ def check_method(adata: AnnData):
     assert "groups" in adata.uns["sample_adata"].varm
     assert isinstance(adata.uns["sample_adata"].varm["groups"], csc_matrix)
     return True
+
+
+def _check_nonegative_integers_X(adata):
+    """Check that adata.X contains counts."""
+    data_check = adata.X.data[0:100]
+    negative = any(data_check < 0)
+    non_integers = any(data_check % 1 != 0)
+    return negative | non_integers
 
 
 def sample_dataset():

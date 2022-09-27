@@ -36,7 +36,7 @@ def embedding_scvi(adata_ref: AnnData, adata_query: AnnData, n_hvgs: int = 5000,
 
     # Train scVI model
     if outdir is not None:
-        outdir = outdir + f"/model_{ref_dataset}query/"
+        outdir = outdir + f"/model_{ref_dataset}/"
     model_scvi = _train_scVI(adata_merge_train, outfile=outdir, **kwargs)
 
     # Get latent embeddings
@@ -45,7 +45,7 @@ def embedding_scvi(adata_ref: AnnData, adata_query: AnnData, n_hvgs: int = 5000,
 
 
 def embedding_scArches(adata_ref: AnnData, adata_query: AnnData, n_hvgs: int = 5000, outdir: str = None, **kwargs):
-    r"""Latent embedding with scVI.
+    r"""Latent embedding with scVI + scArches.
 
     Parameters:
     ------------
@@ -77,14 +77,14 @@ def embedding_scArches(adata_ref: AnnData, adata_query: AnnData, n_hvgs: int = 5
 
     # Train scVI model
     if outdir is not None:
-        outdir = outdir + f"/model_{ref_dataset}/"
-    vae_ref = _train_scVI(adata_ref_train, outfile=outdir, **kwargs)
+        ref_outdir = outdir + f"/model_{ref_dataset}/"
+    vae_ref = _train_scVI(adata_ref_train, outfile=ref_outdir, **kwargs)
 
     # Fit query data to scVI model
     adata_query_fit = adata_query.copy()
     if outdir is not None:
-        outdir = outdir + f"/model_fit_query2{ref_dataset}/"
-    vae_q = _fit_scVI(vae_ref, adata_query_fit, outfile=outdir)
+        q_outdir = outdir + f"/model_fit_query2{ref_dataset}/"
+    vae_q = _fit_scVI(vae_ref, adata_query_fit, outfile=q_outdir)
 
     # Get latent embeddings
     adata_merge.obsm["X_scVI"] = np.vstack([vae_q.get_latent_representation(), vae_ref.get_latent_representation()])

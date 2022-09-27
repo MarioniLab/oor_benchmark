@@ -57,7 +57,7 @@ def scArches_mappingQClabels(
             adata_merge.obsm["X_scVI"] = np.vstack(
                 [vae_q.get_latent_representation(), vae_ref.get_latent_representation()]
             )
-        except FileNotFoundError:
+        except (FileNotFoundError, ValueError):
             adata_merge = embedding_scArches(adata_ref, adata_query, outdir=outdir, **kwargs)
 
     # Train KNN classifier
@@ -157,7 +157,7 @@ def _weighted_knn_transfer_uncertainty(
         try:
             with open(model, "rb") as f:
                 knn_model = pkl.load(f)
-        except FileNotFoundError:
+        except (FileNotFoundError, ValueError):
             raise FileNotFoundError(f"{model} should be either a trained NNDescent object or a path to a pickle file")
 
     if isinstance(train_labels, pd.Series):
@@ -242,7 +242,7 @@ def scArches_mappingQCreconstruction(
         vae_q = scvi.model.SCVI.load(outdir + f"/model_fit_query2{embedding_reference}/")
         adata_merge = anndata.concat([adata_query, adata_ref])
         adata_merge.obsm["X_scVI"] = np.vstack([vae_q.get_latent_representation(), vae_ref.get_latent_representation()])
-    except FileNotFoundError:
+    except (FileNotFoundError, ValueError):
         adata_merge = embedding_scArches(adata_ref, adata_query, outdir=outdir, **kwargs)
 
     vae_q = scvi.model.SCVI.load(outdir + f"/model_fit_query2{embedding_reference}/")
@@ -290,7 +290,7 @@ def _reconstruction_dist_cosine(
     elif type(model) == str:
         try:
             vae = scvi.model.SCVI.load(model)
-        except FileNotFoundError:
+        except (FileNotFoundError, ValueError):
             raise FileNotFoundError(
                 f"{model} should be either a trained scvi.model.SCVI object or a path to a model dir"
             )
