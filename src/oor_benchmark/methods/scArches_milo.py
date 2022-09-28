@@ -1,4 +1,3 @@
-import anndata
 import milopy
 import numpy as np
 import scanpy as sc
@@ -76,27 +75,27 @@ def scArches_milo(
     \**kwargs:
         extra arguments to embedding_scArches
     """
-    adata_ref = adata[adata.obs["dataset_group"] == embedding_reference].copy()
-    if diff_reference == embedding_reference:  # for AR design
-        adata_query = adata[adata.obs["dataset_group"] == "query"].copy()
-    else:
-        adata_query = adata[adata.obs["dataset_group"] != embedding_reference].copy()
-
     # for testing (remove later?)
-    if "X_scVI" in adata_ref.obsm and "X_scVI" in adata_query.obsm:
-        adata_merge = anndata.concat([adata_query, adata_ref])
+    if "X_scVI" in adata.obsm:
+        adata_merge = adata
     else:
         if outdir is not None:
             try:
                 # if os.path.exists(outdir + f"/model_{embedding_reference}/") and os.path.exists(outdir + f"/model_fit_query2{embedding_reference}/"):
                 vae_ref = scvi.model.SCVI.load(outdir + f"/model_{embedding_reference}/")
                 vae_q = scvi.model.SCVI.load(outdir + f"/model_fit_query2{embedding_reference}/")
-                adata_merge = anndata.concat([vae_q.adata, vae_ref.adata])
+                # adata_merge = anndata.concat([vae_q.adata, vae_ref.adata])
+                adata_merge = adata
                 adata_merge.obsm["X_scVI"] = np.vstack(
                     [vae_q.get_latent_representation(), vae_ref.get_latent_representation()]
                 )
             except (ValueError, FileNotFoundError):
                 # else:
+                adata_ref = adata[adata.obs["dataset_group"] == embedding_reference].copy()
+                if diff_reference == embedding_reference:  # for AR design
+                    adata_query = adata[adata.obs["dataset_group"] == "query"].copy()
+                else:
+                    adata_query = adata[adata.obs["dataset_group"] != embedding_reference].copy()
                 adata_merge = embedding_scArches(adata_ref, adata_query, outdir=outdir, batch_key="sample_id", **kwargs)
         else:
             adata_merge = embedding_scArches(adata_ref, adata_query, **kwargs)

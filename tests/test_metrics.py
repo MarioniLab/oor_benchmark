@@ -40,4 +40,4 @@ def test_positives(anndata_trained):
     adata_merge = anndata_trained.copy()
     tpr_df = FDR_TPR_FPR(adata_merge)
     assert tpr_df["TP"][0] + tpr_df["FP"][0] == adata_merge.uns["sample_adata"].var["OOR_signif"].sum()
-    assert tpr_df["TP"][0] + tpr_df["FN"][0] == adata_merge.uns["sample_adata"].var["OOR_state"].sum()
+    assert tpr_df["TP"][0] + tpr_df["FN"][0] == adata_merge.uns["sample_adata"].var["OOR_state_group"].sum()
