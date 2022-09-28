@@ -75,54 +75,47 @@ def scArches_milo(
     \**kwargs:
         extra arguments to embedding_scArches
     """
+    # Subset to datasets of interest
+    adata = adata[adata.obs["dataset_group"].isin([embedding_reference, diff_reference, "query"])].copy()
+
     # for testing (remove later?)
-    if "X_scVI" in adata.obsm:
-        adata_merge = adata
-    else:
+    if "X_scVI" not in adata.obsm:
         if outdir is not None:
             try:
                 # if os.path.exists(outdir + f"/model_{embedding_reference}/") and os.path.exists(outdir + f"/model_fit_query2{embedding_reference}/"):
                 vae_ref = scvi.model.SCVI.load(outdir + f"/model_{embedding_reference}/")
                 vae_q = scvi.model.SCVI.load(outdir + f"/model_fit_query2{embedding_reference}/")
-                # adata_merge = anndata.concat([vae_q.adata, vae_ref.adata])
-                adata_merge = adata
-                adata_merge.obsm["X_scVI"] = np.vstack(
+                adata.obsm["X_scVI"] = np.vstack(
                     [vae_q.get_latent_representation(), vae_ref.get_latent_representation()]
                 )
             except (ValueError, FileNotFoundError):
-                # else:
-                adata_ref = adata[adata.obs["dataset_group"] == embedding_reference].copy()
-                if diff_reference == embedding_reference:  # for AR design
-                    adata_query = adata[adata.obs["dataset_group"] == "query"].copy()
-                else:
-                    adata_query = adata[adata.obs["dataset_group"] != embedding_reference].copy()
-                adata_merge = embedding_scArches(adata_ref, adata_query, outdir=outdir, batch_key="sample_id", **kwargs)
+                embedding_scArches(
+                    adata, ref_dataset=embedding_reference, outdir=outdir, batch_key="sample_id", **kwargs
+                )
         else:
-            adata_merge = embedding_scArches(adata_ref, adata_query, **kwargs)
+            embedding_scArches(adata, ref_dataset=embedding_reference, outdir=outdir, batch_key="sample_id", **kwargs)
 
     # remove embedding_reference from anndata if not needed anymore
     if diff_reference != embedding_reference:
-        adata_merge = adata_merge[adata_merge.obs["dataset_group"] != embedding_reference].copy()
+        adata = adata[adata.obs["dataset_group"] != embedding_reference].copy()
 
     # Make KNN graph for Milo neigbourhoods
-    n_controls = adata_merge[adata_merge.obs["dataset_group"] == diff_reference].obs[sample_col].unique().shape[0]
-    n_querys = adata_merge[adata_merge.obs["dataset_group"] == "query"].obs[sample_col].unique().shape[0]
-    sc.pp.neighbors(adata_merge, use_rep="X_scVI", n_neighbors=(n_controls + n_querys) * 5)
+    n_controls = adata[adata.obs["dataset_group"] == diff_reference].obs[sample_col].unique().shape[0]
+    n_querys = adata[adata.obs["dataset_group"] == "query"].obs[sample_col].unique().shape[0]
+    sc.pp.neighbors(adata, use_rep="X_scVI", n_neighbors=(n_controls + n_querys) * 5)
 
-    run_milo(
-        adata_merge, "query", diff_reference, sample_col=sample_col, annotation_col=annotation_col, design=milo_design
-    )
+    run_milo(adata, "query", diff_reference, sample_col=sample_col, annotation_col=annotation_col, design=milo_design)
 
     # Harmonize output
     if harmonize_output:
-        sample_adata = adata_merge.uns["nhood_adata"].T.copy()
+        sample_adata = adata.uns["nhood_adata"].T.copy()
         sample_adata.var["OOR_score"] = sample_adata.var["logFC"].copy()
         sample_adata.var["OOR_signif"] = (
             ((sample_adata.var["SpatialFDR"] < signif_alpha) & (sample_adata.var["logFC"] > 0)).astype(int).copy()
         )
-        sample_adata.varm["groups"] = adata_merge.obsm["nhoods"].T
-        adata_merge.uns["sample_adata"] = sample_adata.copy()
-    return adata_merge
+        sample_adata.varm["groups"] = adata.obsm["nhoods"].T
+        adata.uns["sample_adata"] = sample_adata.copy()
+    return adata
 
 
 def scArches_atlas_milo_ctrl(adata: AnnData, **kwargs):

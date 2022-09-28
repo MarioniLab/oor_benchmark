@@ -7,19 +7,15 @@ from oor_benchmark.methods._latent_embedding import embedding_scArches, embeddin
 @pytest.fixture
 def anndata_trained(seed=42):
     adata = sample_dataset()
-    adata_ref = adata[adata.obs["dataset_group"] == "atlas"].copy()
-    adata_query = adata[adata.obs["dataset_group"] == "query"].copy()
-    adata_merge = embedding_scvi(adata_ref, adata_query, n_hvgs=50, train_params={"max_epochs": 1})
-    return adata_merge
+    embedding_scvi(adata, n_hvgs=50, train_params={"max_epochs": 1})
+    return adata
 
 
 @pytest.fixture
 def anndata_trained_scarches(seed=42):
     adata = sample_dataset()
-    adata_ref = adata[adata.obs["dataset_group"] == "atlas"].copy()
-    adata_query = adata[adata.obs["dataset_group"] == "query"].copy()
-    adata_merge = embedding_scArches(adata_ref, adata_query, n_hvgs=50, train_params={"max_epochs": 1})
-    return adata_merge
+    embedding_scArches(adata, ref_dataset="atlas", n_hvgs=50, train_params={"max_epochs": 1})
+    return adata
 
 
 # @pytest.mark.skip(reason="This decorator should be removed when test passes.")
