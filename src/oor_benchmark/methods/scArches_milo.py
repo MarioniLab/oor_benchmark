@@ -83,11 +83,12 @@ def scArches_milo(
     try:
         assert embedding_reference in adata.obs["dataset_group"]
     except AssertionError:
-        raise ValueError(f"Reference dataset {embedding_reference} not found in adata.obs['dataset_group']")
+        raise ValueError(f"Embedding reference '{embedding_reference}' not found in adata.obs['dataset_group']")
     try:
         assert diff_reference in adata.obs["dataset_group"]
     except AssertionError:
-        raise ValueError(f"Reference dataset {diff_reference} not found in adata.obs['dataset_group']")
+        raise ValueError(f"Differential analysis reference '{diff_reference}' not found in adata.obs['dataset_group']")
+
     adata = adata[adata.obs["dataset_group"].isin([embedding_reference, diff_reference, "query"])]
     adata = adata[adata.obs.sort_values("dataset_group").index].copy()
 

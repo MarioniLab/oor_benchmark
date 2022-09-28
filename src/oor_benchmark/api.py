@@ -39,7 +39,8 @@ def sample_dataset():
     """Create a simple dataset to use for testing methods in this task."""
     np.random.seed(3456)
     adata = sc.datasets.pbmc3k_processed()
-    adata = adata.raw.to_adata()
+    adata_raw = sc.datasets.pbmc3k()
+    adata.X = adata_raw[adata.obs_names][:, adata.var_names].X.copy()
     # Split in samples and dataset group
     adata.obs["sample_id"] = np.random.choice([f"S{n}" for n in range(16)], size=adata.n_obs)
     adata.obs["dataset_group"] = np.nan

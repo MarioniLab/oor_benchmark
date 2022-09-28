@@ -32,6 +32,7 @@ def embedding_scvi(adata_merge: AnnData, n_hvgs: int = 5000, outdir: str = None,
     adata_merge_train = adata_merge.copy()
 
     # Filter genes
+    adata_merge_train.layers["counts"] = adata_merge_train.X.copy()
     _filter_genes_scvi(adata_merge_train)
 
     # Train scVI model
@@ -76,6 +77,7 @@ def embedding_scArches(
 
     # Filter genes
     assert ref_dataset in adata_merge.obs["dataset_group"].unique().tolist()
+    adata_merge.layers["counts"] = adata_merge.X.copy()
     adata_ref_train = adata_merge[adata_merge.obs["dataset_group"] == ref_dataset].copy()
     _filter_genes_scvi(adata_ref_train)
 
@@ -108,7 +110,7 @@ def _train_scVI(train_adata: AnnData, train_params: dict = None, outfile: str = 
     ------------
     train_adata : AnnData
         training data (already subset to highly variable genes)
-        counts should be stored in train_adata.X
+        counts should be stored in train_adata.layers['counts']
     outfile : str
         path to dir to save trained model
     train_params : dict, optional
@@ -116,7 +118,7 @@ def _train_scVI(train_adata: AnnData, train_params: dict = None, outfile: str = 
     \**kwargs : dict, optional
         Extra arguments to `scvi.model.SCVI.setup_anndata` (specifying batch etc)
     """
-    scvi.model.SCVI.setup_anndata(train_adata, **kwargs)
+    scvi.model.SCVI.setup_anndata(train_adata, layer="counts", **kwargs)
 
     arches_params = {
         "use_layer_norm": "both",
@@ -145,7 +147,7 @@ def _fit_scVI(
         trained scVI model
     query_adata : AnnData
         AnnData object of query data (already subset to highly variable genes)
-        counts should be stored in query_adata.X
+        counts should be stored in query_adata.layers['counts']
     outfile : str
         path to dir to save fitted model (if None, don't save)
     train_params : dict, optional
