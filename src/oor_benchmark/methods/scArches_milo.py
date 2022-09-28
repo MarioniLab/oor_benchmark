@@ -1,10 +1,14 @@
+import logging
+
 import milopy
-import numpy as np
+import pandas as pd
 import scanpy as sc
 import scvi
 from anndata import AnnData
 
 from ._latent_embedding import embedding_scArches
+
+# logger = logging.getLogger(__name__)
 
 
 def run_milo(
@@ -76,7 +80,8 @@ def scArches_milo(
         extra arguments to embedding_scArches
     """
     # Subset to datasets of interest
-    adata = adata[adata.obs["dataset_group"].isin([embedding_reference, diff_reference, "query"])].copy()
+    adata = adata[adata.obs["dataset_group"].isin([embedding_reference, diff_reference, "query"])]
+    adata = adata[adata.obs.sort_values("dataset_group").index].copy()
 
     # for testing (remove later?)
     if "X_scVI" not in adata.obsm:
@@ -85,10 +90,23 @@ def scArches_milo(
                 # if os.path.exists(outdir + f"/model_{embedding_reference}/") and os.path.exists(outdir + f"/model_fit_query2{embedding_reference}/"):
                 vae_ref = scvi.model.SCVI.load(outdir + f"/model_{embedding_reference}/")
                 vae_q = scvi.model.SCVI.load(outdir + f"/model_fit_query2{embedding_reference}/")
-                adata.obsm["X_scVI"] = np.vstack(
-                    [vae_q.get_latent_representation(), vae_ref.get_latent_representation()]
-                )
+                assert vae_ref.adata.obs_names.isin(
+                    adata[adata.obs["dataset_group"] == embedding_reference].obs_names
+                ).all()
+                X_scVI_ref = pd.DataFrame(vae_ref.get_latent_representation(), index=vae_ref.adata.obs_names)
+                X_scVI_q = pd.DataFrame(vae_q.get_latent_representation(), index=vae_q.adata.obs_names)
+                X_scVI = pd.concat([X_scVI_q, X_scVI_ref], axis=0)
+                adata.obsm["X_scVI"] = X_scVI.loc[adata.obs_names].values
+                logging.info("Loading saved scVI models")
             except (ValueError, FileNotFoundError):
+                logging.info("Saved scVI models not found, running scVI and scArches embedding")
+                embedding_scArches(
+                    adata, ref_dataset=embedding_reference, outdir=outdir, batch_key="sample_id", **kwargs
+                )
+            except AssertionError:
+                logging.info(
+                    "Saved scVI model doesn't match cells in reference dataset, running scVI and scArches embedding"
+                )
                 embedding_scArches(
                     adata, ref_dataset=embedding_reference, outdir=outdir, batch_key="sample_id", **kwargs
                 )
