@@ -17,6 +17,7 @@ def check_dataset(adata: AnnData):
 
 def check_method(adata: AnnData):
     """Check that method output fits expected API."""
+    assert check_dataset(adata)
     assert "OOR_state" in adata.obs
     assert "sample_adata" in adata.uns
     assert "OOR_score" in adata.uns["sample_adata"].var

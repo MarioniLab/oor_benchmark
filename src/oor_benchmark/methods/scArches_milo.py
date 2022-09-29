@@ -1,4 +1,5 @@
 import logging
+import warnings
 
 import milopy
 import pandas as pd
@@ -9,6 +10,8 @@ from anndata import AnnData
 from ._latent_embedding import embedding_scArches
 
 # logger = logging.getLogger(__name__)
+#  Turn off deprecation warnings in scvi-tools
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
 def run_milo(
@@ -81,11 +84,11 @@ def scArches_milo(
     """
     # Subset to datasets of interest
     try:
-        assert embedding_reference in adata.obs["dataset_group"]
+        assert embedding_reference in adata.obs["dataset_group"].unique()
     except AssertionError:
         raise ValueError(f"Embedding reference '{embedding_reference}' not found in adata.obs['dataset_group']")
     try:
-        assert diff_reference in adata.obs["dataset_group"]
+        assert diff_reference in adata.obs["dataset_group"].unique()
     except AssertionError:
         raise ValueError(f"Differential analysis reference '{diff_reference}' not found in adata.obs['dataset_group']")
 
