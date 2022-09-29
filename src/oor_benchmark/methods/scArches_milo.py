@@ -110,6 +110,8 @@ def scArches_milo(
                 X_scVI = pd.concat([X_scVI_q, X_scVI_ref], axis=0)
                 adata.obsm["X_scVI"] = X_scVI.loc[adata.obs_names].values
                 logging.info("Loading saved scVI models")
+                del vae_ref
+                del vae_q
             except (ValueError, FileNotFoundError):
                 logging.info("Saved scVI models not found, running scVI and scArches embedding")
                 embedding_scArches(
