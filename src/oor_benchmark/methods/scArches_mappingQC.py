@@ -278,8 +278,6 @@ def scArches_mappingQCreconstruction(
                 X_scVI = pd.concat([X_scVI_q, X_scVI_ref], axis=0)
                 adata.obsm["X_scVI"] = X_scVI.loc[adata.obs_names].values
                 logging.info("Loading saved scVI models")
-                del vae_ref
-                del vae_q
             except (ValueError, FileNotFoundError):
                 logging.info("Saved scVI models not found, running scVI and scArches embedding")
                 embedding_scArches(
@@ -346,8 +344,8 @@ def _reconstruction_dist_cosine(
             )
 
     # Check the model is correct
-    assert vae.adata.n_obs == query_adata.n_obs, "The model was trained on a different set of cells"
-    assert all(vae.adata.obs_names == query_adata.obs_names), "The model was trained on cells in a different order"
+    assert query_adata.obs_names.isin(vae.adata.obs_names).all(), "The model was trained on a different set of cells"
+    # assert all(vae.adata.obs_names == query_adata.obs_names), "The model was trained on cells in a different order"
 
     # Compute true log-normalized gene expression profile
     if "log1p" not in query_adata.uns.keys():
@@ -356,9 +354,13 @@ def _reconstruction_dist_cosine(
     X_true = query_adata[:, vae.adata.var_names].X.copy()
 
     scvi.settings.seed = seed
-    post_sample = vae.posterior_predictive_sample(n_samples=n_samples)
+    post_sample = vae.posterior_predictive_sample(
+        indices=np.where(vae.adata.obs_names.isin(query_adata.obs_names))[0], n_samples=n_samples
+    )
     post_sample = np.log1p(post_sample)
     X_pred = post_sample.mean(2)
+    X_pred_df = pd.DataFrame(X_pred, index=vae.adata.obs_names[vae.adata.obs_names.isin(query_adata.obs_names)])
+    X_pred = X_pred_df.loc[query_adata.obs_names].values
 
     if scipy.sparse.issparse(X_true):
         X_true = X_true.toarray()
