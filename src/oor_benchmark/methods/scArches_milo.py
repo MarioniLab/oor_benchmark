@@ -134,7 +134,8 @@ def scArches_milo(
     # Make KNN graph for Milo neigbourhoods
     n_controls = adata[adata.obs["dataset_group"] == diff_reference].obs[sample_col].unique().shape[0]
     n_querys = adata[adata.obs["dataset_group"] == "query"].obs[sample_col].unique().shape[0]
-    sc.pp.neighbors(adata, use_rep="X_scVI", n_neighbors=(n_controls + n_querys) * 5)
+    #  Set max to 200 or memory explodes for large datasets
+    sc.pp.neighbors(adata, use_rep="X_scVI", n_neighbors=max([(n_controls + n_querys) * 5, 200]))
 
     run_milo(adata, "query", diff_reference, sample_col=sample_col, annotation_col=annotation_col, design=milo_design)
 
