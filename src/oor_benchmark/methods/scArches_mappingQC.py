@@ -1,3 +1,4 @@
+import logging
 import pickle as pkl
 from collections import Counter
 from typing import List, Union
@@ -13,7 +14,6 @@ from anndata import AnnData
 from pynndescent import NNDescent
 from scipy.sparse import csc_matrix, identity
 
-from ..api import check_dataset
 from ._latent_embedding import embedding_scArches
 
 # --- KNN classifier label transfer --- #
@@ -41,28 +41,50 @@ def scArches_mappingQClabels(
     \**kwargs:
         extra arguments to embedding_scArches
     """
-    assert check_dataset(adata)
+    # Subset to datasets of interest
+    try:
+        assert embedding_reference in adata.obs["dataset_group"].unique()
+    except AssertionError:
+        raise ValueError(f"Embedding reference '{embedding_reference}' not found in adata.obs['dataset_group']")
 
-    adata_ref = adata[adata.obs["dataset_group"] == embedding_reference].copy()
-    adata_query = adata[adata.obs["dataset_group"] != embedding_reference].copy()
+    adata = adata[adata.obs["dataset_group"].isin([embedding_reference, "query"])]
+    adata = adata[adata.obs.sort_values("dataset_group").index].copy()
 
     # for testing (remove later?)
-    if "X_scVI" in adata_ref.obsm and "X_scVI" in adata_query.obsm:
-        adata_merge = anndata.concat([adata_query, adata_ref])
-    else:
-        try:
-            vae_ref = scvi.model.SCVI.load(outdir + f"/model_{embedding_reference}/")
-            vae_q = scvi.model.SCVI.load(outdir + f"/model_fit_query2{embedding_reference}/")
-            adata_merge = anndata.concat([adata_query, adata_ref])
-            adata_merge.obsm["X_scVI"] = np.vstack(
-                [vae_q.get_latent_representation(), vae_ref.get_latent_representation()]
-            )
-        except (FileNotFoundError, ValueError):
-            adata_merge = embedding_scArches(adata_ref, adata_query, outdir=outdir, **kwargs)
+    if "X_scVI" not in adata.obsm:
+        if outdir is not None:
+            try:
+                # if os.path.exists(outdir + f"/model_{embedding_reference}/") and os.path.exists(outdir + f"/model_fit_query2{embedding_reference}/"):
+                vae_ref = scvi.model.SCVI.load(outdir + f"/model_{embedding_reference}/")
+                vae_q = scvi.model.SCVI.load(outdir + f"/model_fit_query2{embedding_reference}/")
+                assert vae_ref.adata.obs_names.isin(
+                    adata[adata.obs["dataset_group"] == embedding_reference].obs_names
+                ).all()
+                X_scVI_ref = pd.DataFrame(vae_ref.get_latent_representation(), index=vae_ref.adata.obs_names)
+                X_scVI_q = pd.DataFrame(vae_q.get_latent_representation(), index=vae_q.adata.obs_names)
+                X_scVI = pd.concat([X_scVI_q, X_scVI_ref], axis=0)
+                adata.obsm["X_scVI"] = X_scVI.loc[adata.obs_names].values
+                logging.info("Loading saved scVI models")
+                del vae_ref
+                del vae_q
+            except (ValueError, FileNotFoundError):
+                logging.info("Saved scVI models not found, running scVI and scArches embedding")
+                embedding_scArches(
+                    adata, ref_dataset=embedding_reference, outdir=outdir, batch_key="sample_id", **kwargs
+                )
+            except AssertionError:
+                logging.info(
+                    "Saved scVI model doesn't match cells in reference dataset, running scVI and scArches embedding"
+                )
+                embedding_scArches(
+                    adata, ref_dataset=embedding_reference, outdir=outdir, batch_key="sample_id", **kwargs
+                )
+        else:
+            embedding_scArches(adata, ref_dataset=embedding_reference, outdir=outdir, batch_key="sample_id", **kwargs)
 
     # Train KNN classifier
     _train_weighted_knn(
-        adata_merge[adata_merge.obs["dataset_group"] == embedding_reference],
+        adata[adata.obs["dataset_group"] == embedding_reference],
         outfile=outdir + "weighted_KNN_classifier.pkl",
         n_neighbors=k_neighbors,
     )
@@ -70,21 +92,21 @@ def scArches_mappingQClabels(
     # Compute label transfer probability
     mappingQC_labels = _weighted_knn_transfer_uncertainty(
         outdir + "weighted_KNN_classifier.pkl",
-        query_adata=adata_merge[adata_merge.obs["dataset_group"] != embedding_reference],
-        train_labels=adata_merge[adata_merge.obs["dataset_group"] == embedding_reference].obs[annotation_col],
+        query_adata=adata[adata.obs["dataset_group"] != embedding_reference],
+        train_labels=adata[adata.obs["dataset_group"] == embedding_reference].obs[annotation_col],
     )["pred_uncertainty"]
 
-    adata_merge.obs["mappingQC_labels"] = np.nan
-    adata_merge.obs.loc[adata_merge.obs["dataset_group"] != embedding_reference, "mappingQC_labels"] = mappingQC_labels
-    adata_merge.obs["mappingQC_labels"] = adata_merge.obs["mappingQC_labels"].fillna(0)
+    adata.obs["mappingQC_labels"] = np.nan
+    adata.obs.loc[adata.obs["dataset_group"] != embedding_reference, "mappingQC_labels"] = mappingQC_labels
+    adata.obs["mappingQC_labels"] = adata.obs["mappingQC_labels"].fillna(0)
 
     # Harmonize output (here groups are cells)
-    sample_adata = anndata.AnnData(var=adata_merge.obs[["mappingQC_labels"]])
+    sample_adata = anndata.AnnData(var=adata.obs[["mappingQC_labels"]])
     sample_adata.var["OOR_score"] = sample_adata.var["mappingQC_labels"].copy()
     sample_adata.var["OOR_signif"] = 0
     sample_adata.varm["groups"] = csc_matrix(identity(n=sample_adata.n_vars))
-    adata_merge.uns["sample_adata"] = sample_adata.copy()
-    return adata_merge
+    adata.uns["sample_adata"] = sample_adata.copy()
+    return adata
 
 
 def _train_weighted_knn(train_adata: AnnData, outfile: str = None, use_rep: str = "X_scVI", n_neighbors: int = 50):
@@ -232,34 +254,62 @@ def scArches_mappingQCreconstruction(
     \**kwargs:
         extra arguments to embedding_scArches
     """
-    assert check_dataset(adata)
-
-    adata_ref = adata[adata.obs["dataset_group"] == embedding_reference].copy()
-    adata_query = adata[adata.obs["dataset_group"] != embedding_reference].copy()
-
+    # Subset to datasets of interest
     try:
-        vae_ref = scvi.model.SCVI.load(outdir + f"/model_{embedding_reference}/")
-        vae_q = scvi.model.SCVI.load(outdir + f"/model_fit_query2{embedding_reference}/")
-        adata_merge = anndata.concat([adata_query, adata_ref])
-        adata_merge.obsm["X_scVI"] = np.vstack([vae_q.get_latent_representation(), vae_ref.get_latent_representation()])
-    except (FileNotFoundError, ValueError):
-        adata_merge = embedding_scArches(adata_ref, adata_query, outdir=outdir, **kwargs)
+        assert embedding_reference in adata.obs["dataset_group"].unique()
+    except AssertionError:
+        raise ValueError(f"Embedding reference '{embedding_reference}' not found in adata.obs['dataset_group']")
+
+    adata = adata[adata.obs["dataset_group"].isin([embedding_reference, "query"])]
+    adata = adata[adata.obs.sort_values("dataset_group").index].copy()
+
+    # for testing (remove later?)
+    if "X_scVI" not in adata.obsm:
+        if outdir is not None:
+            try:
+                # if os.path.exists(outdir + f"/model_{embedding_reference}/") and os.path.exists(outdir + f"/model_fit_query2{embedding_reference}/"):
+                vae_ref = scvi.model.SCVI.load(outdir + f"/model_{embedding_reference}/")
+                vae_q = scvi.model.SCVI.load(outdir + f"/model_fit_query2{embedding_reference}/")
+                assert vae_ref.adata.obs_names.isin(
+                    adata[adata.obs["dataset_group"] == embedding_reference].obs_names
+                ).all()
+                X_scVI_ref = pd.DataFrame(vae_ref.get_latent_representation(), index=vae_ref.adata.obs_names)
+                X_scVI_q = pd.DataFrame(vae_q.get_latent_representation(), index=vae_q.adata.obs_names)
+                X_scVI = pd.concat([X_scVI_q, X_scVI_ref], axis=0)
+                adata.obsm["X_scVI"] = X_scVI.loc[adata.obs_names].values
+                logging.info("Loading saved scVI models")
+                del vae_ref
+                del vae_q
+            except (ValueError, FileNotFoundError):
+                logging.info("Saved scVI models not found, running scVI and scArches embedding")
+                embedding_scArches(
+                    adata, ref_dataset=embedding_reference, outdir=outdir, batch_key="sample_id", **kwargs
+                )
+            except AssertionError:
+                logging.info(
+                    "Saved scVI model doesn't match cells in reference dataset, running scVI and scArches embedding"
+                )
+                embedding_scArches(
+                    adata, ref_dataset=embedding_reference, outdir=outdir, batch_key="sample_id", **kwargs
+                )
+        else:
+            embedding_scArches(adata, ref_dataset=embedding_reference, outdir=outdir, batch_key="sample_id", **kwargs)
 
     vae_q = scvi.model.SCVI.load(outdir + f"/model_fit_query2{embedding_reference}/")
 
-    mappingQC_reconstruction = _reconstruction_dist_cosine(vae_q, adata_query)
+    mappingQC_reconstruction = _reconstruction_dist_cosine(vae_q, adata[adata.obs["dataset_group"] == "query"])
     adata.obs["mappingQC_reconstruction"] = np.nan
     adata.obs.loc[
         adata.obs["dataset_group"] != embedding_reference, "mappingQC_reconstruction"
     ] = mappingQC_reconstruction
 
     # Harmonize output (here groups are cells)
-    sample_adata = anndata.AnnData(var=adata_merge.obs[["mappingQC_reconstruction"]])
+    sample_adata = anndata.AnnData(var=adata.obs[["mappingQC_reconstruction"]])
     sample_adata.var["OOR_score"] = sample_adata.var["mappingQC_reconstruction"].copy()
     sample_adata.var["OOR_signif"] = 0
     sample_adata.varm["groups"] = csc_matrix(identity(n=sample_adata.n_vars))
-    adata_merge.uns["sample_adata"] = sample_adata.copy()
-    return adata_merge
+    adata.uns["sample_adata"] = sample_adata.copy()
+    return adata
 
 
 def _reconstruction_dist_cosine(
@@ -283,7 +333,7 @@ def _reconstruction_dist_cosine(
 
     Returns:
     ------------
-    None, modifies adata in place adding `adata.obs['trueVSpred_gex_cosine']`
+    Cosine distance between true and reconstructed gene expression profile
     """
     if type(model) == scvi.model.SCVI:
         vae = model
