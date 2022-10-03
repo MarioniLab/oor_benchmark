@@ -97,7 +97,8 @@ def embedding_scArches(
     vae_q = _fit_scVI(vae_ref, adata_query_fit, train_params=train_params, outfile=q_outdir)
 
     # Get latent embeddings
-    adata_merge.obsm["X_scVI"] = np.vstack([vae_q.get_latent_representation(), vae_ref.get_latent_representation()])
+    adata_merge = adata_merge[np.hstack([adata_ref_train.obs_names.values, adata_query_fit.obs_names.values])].copy()
+    adata_merge.obsm["X_scVI"] = np.vstack([vae_ref.get_latent_representation(), vae_q.get_latent_representation()])
 
 
 # --- Model wrappers --- #

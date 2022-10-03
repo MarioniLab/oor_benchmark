@@ -135,7 +135,6 @@ def scArches_milo(
     n_controls = adata[adata.obs["dataset_group"] == diff_reference].obs[sample_col].unique().shape[0]
     n_querys = adata[adata.obs["dataset_group"] == "query"].obs[sample_col].unique().shape[0]
     #  Set max to 200 or memory explodes for large datasets
-    print("I'm here")
     k = min([(n_controls + n_querys) * 5, 200])
     sc.pp.neighbors(adata, use_rep="X_scVI", n_neighbors=k)
 
