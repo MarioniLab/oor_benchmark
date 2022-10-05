@@ -1,4 +1,4 @@
-from typing import List
+from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -9,7 +9,7 @@ from sklearn.metrics import auc, precision_recall_curve
 from .utils import _get_sample_adata, make_OOR_per_group
 
 
-def auprc(oor_results: List[AnnData, DataFrame], return_curve: bool = False) -> DataFrame:
+def auprc(oor_results: Union[AnnData, DataFrame], return_curve: bool = False) -> DataFrame:
     """Calculate area under precision-recall curve for OOR state detection.
 
     This metric doesn't use the significance/confidence of the OOR state prediction
