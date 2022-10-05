@@ -85,13 +85,13 @@ def scArches_mappingQClabels(
     # Train KNN classifier
     _train_weighted_knn(
         adata[adata.obs["dataset_group"] == embedding_reference],
-        outfile=outdir + "weighted_KNN_classifier.pkl",
+        outfile=outdir + f"weighted_KNN_classifier.{embedding_reference}.pkl",
         n_neighbors=k_neighbors,
     )
 
     # Compute label transfer probability
     mappingQC_labels = _weighted_knn_transfer_uncertainty(
-        outdir + "weighted_KNN_classifier.pkl",
+        outdir + f"weighted_KNN_classifier.{embedding_reference}.pkl",
         query_adata=adata[adata.obs["dataset_group"] != embedding_reference],
         train_labels=adata[adata.obs["dataset_group"] == embedding_reference].obs[annotation_col],
     )["pred_uncertainty"]
