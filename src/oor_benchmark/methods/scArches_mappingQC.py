@@ -349,14 +349,18 @@ def _reconstruction_dist_cosine(
 
     # Compute true log-normalized gene expression profile
     if "log1p" not in query_adata.uns.keys():
-        sc.pp.normalize_per_cell(query_adata)
+        sc.pp.normalize_total(query_adata, target_sum=10000)
         sc.pp.log1p(query_adata)
     X_true = query_adata[:, vae.adata.var_names].X.copy()
 
+    # Sample posterior
     scvi.settings.seed = seed
     post_sample = vae.posterior_predictive_sample(
         indices=np.where(vae.adata.obs_names.isin(query_adata.obs_names))[0], n_samples=n_samples
     )
+    # Log normalize
+    for s in range(post_sample.shape[2]):
+        post_sample[:, :, s] = ((post_sample[:, :, s].T / post_sample[:, :, s].sum(1)).T) * 10000
     post_sample = np.log1p(post_sample)
     X_pred = post_sample.mean(2)
     X_pred_df = pd.DataFrame(X_pred, index=vae.adata.obs_names[vae.adata.obs_names.isin(query_adata.obs_names)])
@@ -371,6 +375,7 @@ def _reconstruction_dist_cosine(
         X_pred = sc.pp.scale(X_pred, zero_center=False)
         X_true = sc.pp.scale(X_true, zero_center=False)
 
+    # Compare true and predicted gene expression profile
     cosine_all = sklearn.metrics.pairwise.cosine_distances(X_true, X_pred)
     return np.diag(cosine_all)
 
