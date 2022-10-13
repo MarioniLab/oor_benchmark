@@ -10,6 +10,8 @@
 One of the goals of reference-based single-cell RNA-seq analysis is to detect altered cell states that are not observed in the reference dataset.
 This repository contains code to benchmark workflows for integration and differential analysis on the task of detection of Out-of-reference (OOR) states.
 
+The structure of the API was inspired by the [OpenProblems](https://github.com/openproblems-bio/openproblems) task structure. This package was built using the [scverse cookiecutter template](https://github.com/scverse/cookiecutter-scverse).
+
 <!--
 ## Getting started
 

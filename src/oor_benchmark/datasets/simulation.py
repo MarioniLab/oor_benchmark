@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Union
 
 import numpy as np
 from anndata import AnnData
@@ -19,10 +19,10 @@ def _split_train_test(adata: AnnData, annotation_col: str = "leiden", test_frac:
 def simulate_query_reference(
     adata: AnnData,
     batch_col: str = None,
-    query_batch: List[str] = None,
-    ctrl_batch: List[str] = None,
+    query_batch: Union[List[str], None] = None,
+    ctrl_batch: Union[List[str], None] = None,
     annotation_col: str = "leiden",
-    query_annotation: List[str] = None,
+    query_annotation: Union[List[str], None] = None,
     perturbation_type: str = "remove",
     test_frac: float = 0.2,
     DA_frac: float = 0.2,
@@ -68,13 +68,15 @@ def simulate_query_reference(
     None, updates adata.obs in place adding `adata.obs['dataset_group']` column
     """
     np.random.seed(seed)
-
-    if not isinstance(query_annotation, list):
-        raise TypeError("A list of strings should be passed to query_annotation")
-    if not isinstance(query_batch, list):
-        raise TypeError("A list of strings should be passed to query_batch")
-    if not isinstance(ctrl_batch, list):
-        raise TypeError("A list of strings should be passed to ctrl_batch")
+    if query_annotation is not None:
+        if not isinstance(query_annotation, list):
+            raise TypeError("A list of strings should be passed to query_annotation")
+    if query_batch is not None:
+        if not isinstance(query_batch, list):
+            raise TypeError("A list of strings should be passed to query_batch")
+    if ctrl_batch is not None:
+        if not isinstance(ctrl_batch, list):
+            raise TypeError("A list of strings should be passed to ctrl_batch")
 
     # Split in query-control-reference
     if batch_col is not None:
