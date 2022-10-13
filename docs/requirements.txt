@@ -2,4 +2,3 @@ anndata
 scanpy
 scvi-tools
 sklearn
-oor-benchmark
