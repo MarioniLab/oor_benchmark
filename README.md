@@ -12,10 +12,11 @@ This repository contains code to benchmark workflows for integration and differe
 
 The structure of the API was inspired by the [OpenProblems](https://github.com/openproblems-bio/openproblems) task structure. This package was built using the [scverse cookiecutter template](https://github.com/scverse/cookiecutter-scverse).
 
-<!--
 ## Getting started
 
-Please refer to the [documentation][link-docs]. In particular, the
+-   [Quick-start example](https://nbviewer.org/github/emdann/oor_benchmark/blob/master/docs/notebooks/example.ipynb)
+
+<!-- Please refer to the [documentation][link-docs]. In particular, the
 
 -   [API documentation][link-api]. -->
 
