@@ -1,0 +1,12 @@
+name: oor-benchmark-env
+channels:
+    - conda-forge
+    - bioconda
+dependencies:
+    - r-base==4.0.5
+    - bioconductor-edger==3.32.1
+    - r-statmod==1.4.37
+    - notebook
+    - pip
+    - pip:
+          - git+https://github.com/emdann/milopy

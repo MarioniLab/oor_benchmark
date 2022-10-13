@@ -25,9 +25,6 @@ dependencies = [
     "anndata",
     "scanpy",
     "scvi-tools",
-    "r-base == 4.0.5",
-    "bioconductor-edger == 3.32.1",
-    "r-statmod == 1.4.37",
     "milopy @ git+https://github.com/emdann/milopy.git@master",
     "sklearn"
     ]
