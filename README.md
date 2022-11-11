@@ -8,7 +8,7 @@
 [badge-docs]: https://img.shields.io/readthedocs/oor_benchmark
 
 One of the goals of reference-based single-cell RNA-seq analysis is to detect altered cell states that are not observed in the reference dataset.
-This repository contains code to benchmark workflows for integration and differential analysis on the task of detection of Out-of-reference (OOR) states.
+This repository contains code to benchmark workflows for integration and differential analysis on the task of detection of Out-of-reference (OOR) states, used in our [preprint](https://www.biorxiv.org/content/10.1101/2022.11.10.515939v1) on reference design for disease state identification. For code to reproduce analysis in the manuscript see the [reproducibility repo](https://github.com/MarioniLab/oor_design_reproducibility).
 
 The structure of the API was inspired by the [OpenProblems](https://github.com/openproblems-bio/openproblems) task structure. This package was built using the [scverse cookiecutter template](https://github.com/scverse/cookiecutter-scverse).
 
@@ -67,7 +67,7 @@ If you found a bug, please use the [issue tracker][issue-tracker]. -->
 
 ## Citation
 
-> coming soon
+> Dann E., Teichmann S.A. and Marioni J.C. Precise identification of cell states altered in disease with healthy single-cell references. _biorXiv_ https://doi.org/10.1101/2022.11.10.515939
 
 [scverse-discourse]: https://discourse.scverse.org/
 [issue-tracker]: https://github.com/emdann/oor_benchmark/issues
