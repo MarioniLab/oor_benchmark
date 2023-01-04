@@ -42,15 +42,15 @@ def sample_dataset():
     adata = sc.datasets.pbmc3k_processed()
     adata_raw = sc.datasets.pbmc3k()
     adata.X = adata_raw[adata.obs_names][:, adata.var_names].X.copy()
+    adata.obs["cell_annotation"] = adata.obs["louvain"].copy()
     # Split in samples and dataset group
     adata.obs["sample_id"] = np.random.choice([f"S{n}" for n in range(16)], size=adata.n_obs)
     adata.obs["dataset_group"] = np.nan
     adata.obs.loc[adata.obs["sample_id"].isin([f"S{n}" for n in range(8)]), "dataset_group"] = "atlas"
     adata.obs.loc[adata.obs["sample_id"].isin([f"S{n}" for n in range(8, 12)]), "dataset_group"] = "ctrl"
     adata.obs.loc[adata.obs["sample_id"].isin([f"S{n}" for n in range(12, 16)]), "dataset_group"] = "query"
-    # Make out-of-reference cell state
-    adata.obs["OOR_state"] = np.where(adata.obs["louvain"] == "B cells", 1, 0)
-    remove_cells = adata.obs_names[(adata.obs["OOR_state"] == 1) & (adata.obs["dataset_group"] != "query")]
-    adata = adata[~adata.obs_names.isin(remove_cells)].copy()
-    adata.obs["cell_annotation"] = adata.obs["louvain"].copy()
+    # # Make out-of-reference cell state
+    # adata.obs["OOR_state"] = np.where(adata.obs["louvain"] == "B cells", 1, 0)
+    # remove_cells = adata.obs_names[(adata.obs["OOR_state"] == 1) & (adata.obs["dataset_group"] != "query")]
+    # adata = adata[~adata.obs_names.isin(remove_cells)].copy()
     return adata

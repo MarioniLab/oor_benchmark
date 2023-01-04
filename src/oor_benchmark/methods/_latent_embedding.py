@@ -27,13 +27,11 @@ def embedding_scvi(adata_merge: AnnData, n_hvgs: int = 5000, outdir: str = None,
     dataset_groups = adata_merge.obs["dataset_group"].unique().tolist()
     dataset_groups.sort()
     ref_dataset = "".join(dataset_groups)
-    # adata_merge = anndata.concat([adata_query, adata_ref])
-    # adata_merge.layers["counts"] = adata_merge.X.copy()
     adata_merge_train = adata_merge.copy()
 
     # Filter genes
     adata_merge_train.layers["counts"] = adata_merge_train.X.copy()
-    _filter_genes_scvi(adata_merge_train)
+    _filter_genes_scvi(adata_merge_train, n_hvgs=n_hvgs)
 
     # Train scVI model
     if outdir is not None:
@@ -42,7 +40,6 @@ def embedding_scvi(adata_merge: AnnData, n_hvgs: int = 5000, outdir: str = None,
 
     # Get latent embeddings
     adata_merge.obsm["X_scVI"] = model_scvi.get_latent_representation()
-    # return adata_merge
 
 
 def embedding_scArches(
@@ -79,7 +76,7 @@ def embedding_scArches(
     assert ref_dataset in adata_merge.obs["dataset_group"].unique().tolist()
     adata_merge.layers["counts"] = adata_merge.X.copy()
     adata_ref_train = adata_merge[adata_merge.obs["dataset_group"] == ref_dataset].copy()
-    _filter_genes_scvi(adata_ref_train)
+    _filter_genes_scvi(adata_ref_train, n_hvgs=n_hvgs)
 
     # Train scVI model
     if outdir is not None:
@@ -122,6 +119,9 @@ def _train_scVI(train_adata: AnnData, train_params: dict = None, outfile: str = 
     \**kwargs : dict, optional
         Extra arguments to `scvi.model.SCVI.setup_anndata` (specifying batch etc)
     """
+    if train_params is None:
+        train_params = {}
+
     scvi.model.SCVI.setup_anndata(train_adata, layer="counts", **kwargs)
 
     arches_params = {
@@ -173,7 +173,7 @@ def _fit_scVI(
 # --- Latent embedding utils --- #
 
 
-def _filter_genes_scvi(adata: AnnData):
+def _filter_genes_scvi(adata: AnnData, n_hvgs: int = 5000) -> None:
     """Filter genes for latent embedding."""
     # Filter genes not expressed anywhere
     sc.pp.filter_genes(adata, min_cells=1)
@@ -183,4 +183,4 @@ def _filter_genes_scvi(adata: AnnData):
         sc.pp.normalize_per_cell(adata)
         sc.pp.log1p(adata)
 
-    sc.pp.highly_variable_genes(adata, n_top_genes=5000, subset=True)
+    sc.pp.highly_variable_genes(adata, n_top_genes=n_hvgs, subset=True)

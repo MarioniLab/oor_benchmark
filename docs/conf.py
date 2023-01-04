@@ -5,6 +5,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
 # -- Path setup --------------------------------------------------------------
+import oor_benchmark
 import sys
 from datetime import datetime
 from importlib.metadata import metadata
@@ -17,13 +18,13 @@ sys.path.insert(0, str(HERE / "extensions"))
 # -- Project information -----------------------------------------------------
 
 info = metadata("oor_benchmark")
-project = info["Name"]
-author = info["Author"]
+project = "oor_benchmark"
+author = "Emma Dann"
 copyright = f"{datetime.now():%Y}, {author}."
-version = info["Version"]
+version = oor_benchmark.__version__
 
 # The full version, including alpha/beta/rc tags
-release = info["Version"]
+release = oor_benchmark.__version__
 
 bibtex_bibfiles = ["references.bib"]
 templates_path = ["_templates"]
