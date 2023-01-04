@@ -80,14 +80,14 @@ def scVI_milo(
                 del vae_ref
             except (ValueError, FileNotFoundError):
                 logging.info("Saved scVI models not found, running scVI and scArches embedding")
-                embedding_scvi(adata, ref_dataset=embedding_reference, outdir=outdir, batch_key="sample_id", **kwargs)
+                embedding_scvi(adata, outdir=outdir, batch_key="sample_id", **kwargs)
             except AssertionError:
                 logging.info(
                     "Saved scVI model doesn't match cells in reference dataset, running scVI and scArches embedding"
                 )
-                embedding_scvi(adata, ref_dataset=embedding_reference, outdir=outdir, batch_key="sample_id", **kwargs)
+                embedding_scvi(adata, outdir=outdir, batch_key="sample_id", **kwargs)
         else:
-            embedding_scvi(adata, ref_dataset=embedding_reference, outdir=outdir, batch_key="sample_id", **kwargs)
+            embedding_scvi(adata, outdir=outdir, batch_key="sample_id", **kwargs)
 
     # remove embedding_reference from anndata if not needed anymore
     if diff_reference != embedding_reference:

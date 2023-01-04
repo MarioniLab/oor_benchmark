@@ -119,6 +119,9 @@ def _train_scVI(train_adata: AnnData, train_params: dict = None, outfile: str = 
     \**kwargs : dict, optional
         Extra arguments to `scvi.model.SCVI.setup_anndata` (specifying batch etc)
     """
+    if train_params is None:
+        train_params = {}
+
     scvi.model.SCVI.setup_anndata(train_adata, layer="counts", **kwargs)
 
     arches_params = {
