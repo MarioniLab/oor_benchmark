@@ -49,8 +49,8 @@ def sample_dataset():
     adata.obs.loc[adata.obs["sample_id"].isin([f"S{n}" for n in range(8)]), "dataset_group"] = "atlas"
     adata.obs.loc[adata.obs["sample_id"].isin([f"S{n}" for n in range(8, 12)]), "dataset_group"] = "ctrl"
     adata.obs.loc[adata.obs["sample_id"].isin([f"S{n}" for n in range(12, 16)]), "dataset_group"] = "query"
-    # # Make out-of-reference cell state
-    # adata.obs["OOR_state"] = np.where(adata.obs["louvain"] == "B cells", 1, 0)
-    # remove_cells = adata.obs_names[(adata.obs["OOR_state"] == 1) & (adata.obs["dataset_group"] != "query")]
-    # adata = adata[~adata.obs_names.isin(remove_cells)].copy()
+    # Make out-of-reference cell state
+    adata.obs["OOR_state"] = np.where(adata.obs["louvain"] == "B cells", 1, 0)
+    remove_cells = adata.obs_names[(adata.obs["OOR_state"] == 1) & (adata.obs["dataset_group"] != "query")]
+    adata = adata[~adata.obs_names.isin(remove_cells)].copy()
     return adata

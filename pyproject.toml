@@ -26,7 +26,8 @@ dependencies = [
     "scanpy",
     "scvi-tools",
     "milopy @ git+https://github.com/emdann/milopy.git@master",
-    "sklearn"
+    "sklearn",
+    "meld"
     ]
 
 [project.optional-dependencies]
