@@ -1,21 +1,54 @@
 import logging
 import warnings
 
+import cna
 import numpy as np
 import pandas as pd
+import scanpy as sc
 import scvi
 from anndata import AnnData
+from multianndata import MultiAnnData
 from scipy.sparse import csc_matrix
 
 from ._latent_embedding import embedding_scArches
-from ._meld import run_meld
 
 # logger = logging.getLogger(__name__)
 #  Turn off deprecation warnings in scvi-tools
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
-def scArches_meld(
+def run_cna(adata_design: AnnData, query_group: str, reference_group: str, sample_col: str = "sample_id"):
+    """
+    Run MELD to compute probability estimate per condition.
+
+    Following tutorial in https://nbviewer.org/github/yakirr/cna/blob/master/demo/demo.ipynb
+
+    Parameters:
+    ------------
+    adata_design : AnnData
+        AnnData object of disease and reference cells to compare
+    query_group : str
+        Name of query group in adata_design.obs['dataset_group']
+    reference_group : str
+        Name of reference group in adata_design.obs['dataset_group']
+    sample_col : str
+        Name of column in adata_design.obs to use as sample ID
+    """
+    adata_design = MultiAnnData(adata_design, sampleid=sample_col)
+    adata_design.obs["dataset_group"] = adata_design.obs["dataset_group"].astype("category")
+    adata_design.obs["dataset_group_code"] = (
+        adata_design.obs["dataset_group"].cat.reorder_categories([reference_group, query_group]).cat.codes
+    )
+    adata_design.obs_to_sample(["dataset_group_code"])
+
+    res = cna.tl.association(adata_design, adata_design.samplem.dataset_group_code)
+
+    adata_design.obs["CNA_ncorrs"] = res.ncorrs
+
+    return None
+
+
+def scArches_cna(
     adata: AnnData,
     embedding_reference: str = "atlas",
     diff_reference: str = "ctrl",
@@ -25,7 +58,7 @@ def scArches_meld(
     harmonize_output: bool = True,
     **kwargs,
 ):
-    r"""Worflow for OOR state detection with scArches embedding and MELD differential analysis.
+    r"""Worflow for OOR state detection with scArches embedding and CNA differential analysis.
 
     Parameters:
     ------------
@@ -39,7 +72,7 @@ def scArches_meld(
     sample_col: str
         Name of column in adata.obs to use as sample ID
     signif_quantile: float
-        quantile threshold for probability estimate (default: 0.9, top 10% probabilities are considered significant)
+        quantile threshold for CNA ncorr (default: 0.9, top 10% probabilities are considered significant)
     outdir: str
         path to output directory (default: None)
     harmonize_output: bool
@@ -100,14 +133,15 @@ def scArches_meld(
     n_controls = adata[adata.obs["dataset_group"] == diff_reference].obs[sample_col].unique().shape[0]
     n_querys = adata[adata.obs["dataset_group"] == "query"].obs[sample_col].unique().shape[0]
     #  Set max to 200 or memory explodes for large datasets
-    k = min([(n_controls + n_querys) * 3, 200])
+    k = min([(n_controls + n_querys) * 5, 200])
+    sc.pp.neighbors(adata, use_rep="X_scVI", n_neighbors=k)
 
-    run_meld(adata, "query", diff_reference, sample_col=sample_col, n_neighbors=k)
+    run_cna(adata, "query", diff_reference, sample_col=sample_col)
 
     # Harmonize output
     if harmonize_output:
         sample_adata = AnnData(var=adata.obs, varm=adata.obsm)
-        sample_adata.var["OOR_score"] = sample_adata.varm["probability_estimate"]["query"]
+        sample_adata.var["OOR_score"] = sample_adata.var["CNA_ncorrs"]
         quant_10perc = np.quantile(sample_adata.var["OOR_score"], signif_quantile)
         sample_adata.var["OOR_signif"] = sample_adata.var["OOR_score"] >= quant_10perc
         sample_adata.varm["groups"] = csc_matrix(np.identity(sample_adata.n_vars))
@@ -116,16 +150,16 @@ def scArches_meld(
     return adata
 
 
-def scArches_atlas_meld_ctrl(adata: AnnData, **kwargs):
-    """Worflow for OOR state detection with scArches embedding and MELD differential analysis - ACR design."""
-    return scArches_meld(adata, embedding_reference="atlas", diff_reference="ctrl", **kwargs)
+# def scArches_atlas_meld_ctrl(adata: AnnData, **kwargs):
+#     """Worflow for OOR state detection with scArches embedding and MELD differential analysis - ACR design."""
+#     return scArches_meld(adata, embedding_reference="atlas", diff_reference="ctrl", **kwargs)
 
 
-def scArches_atlas_meld_atlas(adata: AnnData, **kwargs):
-    """Worflow for OOR state detection with scArches embedding and MELD differential analysis - AR design."""
-    return scArches_meld(adata, embedding_reference="atlas", diff_reference="atlas", **kwargs)
+# def scArches_atlas_meld_atlas(adata: AnnData, **kwargs):
+#     """Worflow for OOR state detection with scArches embedding and MELD differential analysis - AR design."""
+#     return scArches_meld(adata, embedding_reference="atlas", diff_reference="atlas", **kwargs)
 
 
-def scArches_ctrl_meld_ctrl(adata: AnnData, **kwargs):
-    """Worflow for OOR state detection with scArches embedding and MELD differential analysis - CR design."""
-    return scArches_meld(adata, embedding_reference="ctrl", diff_reference="ctrl", **kwargs)
+# def scArches_ctrl_meld_ctrl(adata: AnnData, **kwargs):
+#     """Worflow for OOR state detection with scArches embedding and MELD differential analysis - CR design."""
+#     return scArches_meld(adata, embedding_reference="ctrl", diff_reference="ctrl", **kwargs)
