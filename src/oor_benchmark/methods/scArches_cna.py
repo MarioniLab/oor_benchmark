@@ -17,15 +17,15 @@ from ._latent_embedding import embedding_scArches
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
-def run_cna(adata_design: AnnData, query_group: str, reference_group: str, sample_col: str = "sample_id"):
+def run_cna(adata: AnnData, query_group: str, reference_group: str, sample_col: str = "sample_id"):
     """
-    Run MELD to compute probability estimate per condition.
+    Run CNA to compute probability estimate per condition.
 
     Following tutorial in https://nbviewer.org/github/yakirr/cna/blob/master/demo/demo.ipynb
 
     Parameters:
     ------------
-    adata_design : AnnData
+    adata : AnnData
         AnnData object of disease and reference cells to compare
     query_group : str
         Name of query group in adata_design.obs['dataset_group']
@@ -34,17 +34,14 @@ def run_cna(adata_design: AnnData, query_group: str, reference_group: str, sampl
     sample_col : str
         Name of column in adata_design.obs to use as sample ID
     """
-    adata_design = MultiAnnData(adata_design, sampleid=sample_col)
+    adata_design = MultiAnnData(adata, sampleid=sample_col)
     adata_design.obs["dataset_group"] = adata_design.obs["dataset_group"].astype("category")
     adata_design.obs["dataset_group_code"] = (
         adata_design.obs["dataset_group"].cat.reorder_categories([reference_group, query_group]).cat.codes
     )
     adata_design.obs_to_sample(["dataset_group_code"])
-
-    res = cna.tl.association(adata_design, adata_design.samplem.dataset_group_code)
-
-    adata_design.obs["CNA_ncorrs"] = res.ncorrs
-
+    res = cna.tl.association(adata_design, adata_design.samplem.dataset_group_code, ks=[10, 15, 20])
+    adata.obs["CNA_ncorrs"] = res.ncorrs
     return None
 
 
@@ -129,7 +126,7 @@ def scArches_cna(
     if diff_reference != embedding_reference:
         adata = adata[adata.obs["dataset_group"] != embedding_reference].copy()
 
-    # Pick K for MELD KNN graph
+    # Pick K for CNA KNN graph
     n_controls = adata[adata.obs["dataset_group"] == diff_reference].obs[sample_col].unique().shape[0]
     n_querys = adata[adata.obs["dataset_group"] == "query"].obs[sample_col].unique().shape[0]
     #  Set max to 200 or memory explodes for large datasets
@@ -137,10 +134,11 @@ def scArches_cna(
     sc.pp.neighbors(adata, use_rep="X_scVI", n_neighbors=k)
 
     run_cna(adata, "query", diff_reference, sample_col=sample_col)
+    assert "CNA_ncorrs" in adata.obs
 
     # Harmonize output
     if harmonize_output:
-        sample_adata = AnnData(var=adata.obs, varm=adata.obsm)
+        sample_adata = AnnData(var=adata.obs)
         sample_adata.var["OOR_score"] = sample_adata.var["CNA_ncorrs"]
         quant_10perc = np.quantile(sample_adata.var["OOR_score"], signif_quantile)
         sample_adata.var["OOR_signif"] = sample_adata.var["OOR_score"] >= quant_10perc
