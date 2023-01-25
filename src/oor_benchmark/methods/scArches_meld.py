@@ -3,6 +3,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
+import scipy.stats
 import scvi
 from anndata import AnnData
 from scipy.sparse import csc_matrix
@@ -15,12 +16,19 @@ from ._meld import run_meld
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
+# def _run_wilcoxon(adata, OOR_state, diff_reference: str = "ctrl"):
+#     query_densities = adata[(adata['OOR_state'] == OOR_state) & (adata['dataset_group'] == 'query')]['sample_density'].values
+#     ctrl_densities = adata[(adata['OOR_state'] == OOR_state) & (adata['dataset_group'] == 'ctrl')]['sample_density'].values
+#     return(scipy.stats.ranksums(query_densities, ctrl_densities))
+
+
 def scArches_meld(
     adata: AnnData,
     embedding_reference: str = "atlas",
     diff_reference: str = "ctrl",
     sample_col: str = "sample_id",
-    signif_quantile: float = 0.9,
+    # signif_quantile: float = 0.9,
+    signif_alpha: float = 0.1,
     outdir: str = None,
     harmonize_output: bool = True,
     **kwargs,
@@ -38,8 +46,8 @@ def scArches_meld(
         Name of reference group in adata.obs['dataset_group'] to use for differential abundance analysis
     sample_col: str
         Name of column in adata.obs to use as sample ID
-    signif_quantile: float
-        quantile threshold for probability estimate (default: 0.9, top 10% probabilities are considered significant)
+    signif_alpha: float
+        Significance threshold for wilcoxon rank-sum test (default: 0.1)
     outdir: str
         path to output directory (default: None)
     harmonize_output: bool
@@ -104,12 +112,29 @@ def scArches_meld(
 
     run_meld(adata, "query", diff_reference, sample_col=sample_col, n_neighbors=k)
 
+    # Run wilcoxon test
+    query_samples = adata.obs[sample_col][adata.obs["dataset_group"] == "query"].unique().tolist()
+    reference_samples = adata.obs[sample_col][adata.obs["dataset_group"] == diff_reference].unique().tolist()
+
+    pvals = []
+    statistics = []
+    for _, c in adata.obsm["sample_densities"].iterrows():
+        statistic, pval = scipy.stats.ranksums(c[query_samples].values, c[reference_samples].values)
+        pvals.append(pval)
+        statistics.append(statistic)
+
+    wilcox_df = pd.DataFrame(
+        np.vstack([np.array(pvals), np.array(statistics)]).T, columns=["wilcox_pval", "wilcox_stat"]
+    )
+    wilcox_df.index = adata.obs_names
+    adata.obs = pd.concat([adata.obs, wilcox_df], 1)
+
     # Harmonize output
     if harmonize_output:
         sample_adata = AnnData(var=adata.obs, varm=adata.obsm)
-        sample_adata.var["OOR_score"] = sample_adata.varm["probability_estimate"]["query"]
-        quant_10perc = np.quantile(sample_adata.var["OOR_score"], signif_quantile)
-        sample_adata.var["OOR_signif"] = sample_adata.var["OOR_score"] >= quant_10perc
+        sample_adata.var["OOR_score"] = sample_adata.var["wilcox_stat"]
+        # quant_10perc = np.quantile(sample_adata.var["OOR_score"], signif_quantile)
+        sample_adata.var["OOR_signif"] = sample_adata.var["wilcox_pval"] < signif_alpha
         sample_adata.varm["groups"] = csc_matrix(np.identity(sample_adata.n_vars))
         adata.uns["sample_adata"] = sample_adata.copy()
 
