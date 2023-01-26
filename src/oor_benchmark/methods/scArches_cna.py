@@ -8,7 +8,6 @@ import scanpy as sc
 import scvi
 from anndata import AnnData
 from multianndata import MultiAnnData
-from scipy.sparse import csc_matrix
 
 from ._latent_embedding import embedding_scArches
 
@@ -40,7 +39,7 @@ def run_cna(adata: AnnData, query_group: str, reference_group: str, sample_col: 
         adata_design.obs["dataset_group"].cat.reorder_categories([reference_group, query_group]).cat.codes
     )
     adata_design.obs_to_sample(["dataset_group_code"])
-    res = cna.tl.association(adata_design, adata_design.samplem.dataset_group_code, ks=[10, 15, 20])
+    res = cna.tl.association(adata_design, adata_design.samplem.dataset_group_code, ks=[20])
     adata.obs["CNA_ncorrs"] = res.ncorrs
     return None
 
@@ -142,7 +141,7 @@ def scArches_cna(
         sample_adata.var["OOR_score"] = sample_adata.var["CNA_ncorrs"]
         quant_10perc = np.quantile(sample_adata.var["OOR_score"], signif_quantile)
         sample_adata.var["OOR_signif"] = sample_adata.var["OOR_score"] >= quant_10perc
-        sample_adata.varm["groups"] = csc_matrix(np.identity(sample_adata.n_vars))
+        # sample_adata.varm["groups"] = csc_matrix(np.identity(sample_adata.n_vars))
         adata.uns["sample_adata"] = sample_adata.copy()
 
     return adata

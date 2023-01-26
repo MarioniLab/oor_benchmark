@@ -6,7 +6,6 @@ import pandas as pd
 import scipy.stats
 import scvi
 from anndata import AnnData
-from scipy.sparse import csc_matrix
 
 from ._latent_embedding import embedding_scArches
 from ._meld import run_meld
@@ -135,7 +134,7 @@ def scArches_meld(
         sample_adata.var["OOR_score"] = sample_adata.var["wilcox_stat"]
         # quant_10perc = np.quantile(sample_adata.var["OOR_score"], signif_quantile)
         sample_adata.var["OOR_signif"] = sample_adata.var["wilcox_pval"] < signif_alpha
-        sample_adata.varm["groups"] = csc_matrix(np.identity(sample_adata.n_vars))
+        # sample_adata.varm["groups"] = csc_matrix(np.identity(sample_adata.n_vars))
         adata.uns["sample_adata"] = sample_adata.copy()
 
     return adata
