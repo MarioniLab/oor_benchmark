@@ -122,10 +122,10 @@ def scArches_milo(
                     "Saved scVI model doesn't match cells in reference dataset, running scVI and scArches embedding"
                 )
                 embedding_scArches(
-                    adata, ref_dataset=embedding_reference, outdir=outdir, batch_key="sample_id", **kwargs
+                    adata, ref_dataset=embedding_reference, outdir=outdir, batch_key=sample_col, **kwargs
                 )
         else:
-            embedding_scArches(adata, ref_dataset=embedding_reference, outdir=outdir, batch_key="sample_id", **kwargs)
+            embedding_scArches(adata, ref_dataset=embedding_reference, outdir=outdir, batch_key=sample_col, **kwargs)
 
     # remove embedding_reference from anndata if not needed anymore
     if diff_reference != embedding_reference:
