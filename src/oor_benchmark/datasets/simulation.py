@@ -110,7 +110,7 @@ def simulate_query_reference(
 
     #  Apply perturbation
     if isinstance(perturbation_type, str):
-        perturb_types = [perturbation_type]
+        perturb_types = [perturbation_type] * len(query_annotation)
     elif isinstance(perturbation_type, list):
         assert len(perturbation_type) == len(
             query_annotation
