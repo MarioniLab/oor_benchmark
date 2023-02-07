@@ -44,7 +44,7 @@ def run_cna(adata: AnnData, query_group: str, reference_group: str, sample_col: 
     return None
 
 
-def scArches_cna(
+def scVI_cna(
     adata: AnnData,
     embedding_reference: str = "atlas",
     diff_reference: str = "ctrl",
