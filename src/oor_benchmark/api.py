@@ -23,8 +23,8 @@ def check_method(adata: AnnData):
     assert "OOR_score" in adata.uns["sample_adata"].var
     assert "OOR_signif" in adata.uns["sample_adata"].var
     assert all(adata.uns["sample_adata"].var["OOR_signif"].isin([0, 1]))
-    assert "groups" in adata.uns["sample_adata"].varm
-    assert isinstance(adata.uns["sample_adata"].varm["groups"], csc_matrix)
+    if "groups" in adata.uns["sample_adata"].varm:
+        assert isinstance(adata.uns["sample_adata"].varm["groups"], csc_matrix)
     return True
 
 
@@ -49,8 +49,8 @@ def sample_dataset():
     adata.obs.loc[adata.obs["sample_id"].isin([f"S{n}" for n in range(8)]), "dataset_group"] = "atlas"
     adata.obs.loc[adata.obs["sample_id"].isin([f"S{n}" for n in range(8, 12)]), "dataset_group"] = "ctrl"
     adata.obs.loc[adata.obs["sample_id"].isin([f"S{n}" for n in range(12, 16)]), "dataset_group"] = "query"
-    # # Make out-of-reference cell state
-    # adata.obs["OOR_state"] = np.where(adata.obs["louvain"] == "B cells", 1, 0)
-    # remove_cells = adata.obs_names[(adata.obs["OOR_state"] == 1) & (adata.obs["dataset_group"] != "query")]
-    # adata = adata[~adata.obs_names.isin(remove_cells)].copy()
+    # Make out-of-reference cell state
+    adata.obs["OOR_state"] = np.where(adata.obs["louvain"] == "B cells", 1, 0)
+    remove_cells = adata.obs_names[(adata.obs["OOR_state"] == 1) & (adata.obs["dataset_group"] != "query")]
+    adata = adata[~adata.obs_names.isin(remove_cells)].copy()
     return adata

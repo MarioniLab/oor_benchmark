@@ -1,11 +1,13 @@
 import logging
 import warnings
 
-import milopy
+import cna
+import numpy as np
 import pandas as pd
 import scanpy as sc
 import scvi
 from anndata import AnnData
+from multianndata import MultiAnnData
 
 from ._latent_embedding import embedding_scArches
 
@@ -14,19 +16,15 @@ from ._latent_embedding import embedding_scArches
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
-def run_milo(
-    adata_design: AnnData,
-    query_group: str,
-    reference_group: str,
-    sample_col: str = "sample_id",
-    annotation_col: str = "cell_annotation",
-    design: str = "~ is_query",
-):
-    """Test differential abundance analysis on neighbourhoods with Milo.
+def run_cna(adata: AnnData, query_group: str, reference_group: str, sample_col: str = "sample_id"):
+    """
+    Run CNA to compute probability estimate per condition.
+
+    Following tutorial in https://nbviewer.org/github/yakirr/cna/blob/master/demo/demo.ipynb
 
     Parameters:
     ------------
-    adata_design : AnnData
+    adata : AnnData
         AnnData object of disease and reference cells to compare
     query_group : str
         Name of query group in adata_design.obs['dataset_group']
@@ -34,31 +32,29 @@ def run_milo(
         Name of reference group in adata_design.obs['dataset_group']
     sample_col : str
         Name of column in adata_design.obs to use as sample ID
-    annotation_cols : str
-        Name of column in adata_design.obs to use as annotation
-    design : str
-        Design formula for differential abundance analysis (the test variable is always 'is_query')
     """
-    milopy.core.make_nhoods(adata_design, prop=0.1)
-    milopy.core.count_nhoods(adata_design, sample_col=sample_col)
-    milopy.utils.annotate_nhoods(adata_design[adata_design.obs["dataset_group"] == reference_group], annotation_col)
-    adata_design.obs["is_query"] = adata_design.obs["dataset_group"] == query_group
-    milopy.core.DA_nhoods(adata_design, design=design)
+    adata_design = MultiAnnData(adata, sampleid=sample_col)
+    adata_design.obs["dataset_group"] = adata_design.obs["dataset_group"].astype("category")
+    adata_design.obs["dataset_group_code"] = (
+        adata_design.obs["dataset_group"].cat.reorder_categories([reference_group, query_group]).cat.codes
+    )
+    adata_design.obs_to_sample(["dataset_group_code"])
+    res = cna.tl.association(adata_design, adata_design.samplem.dataset_group_code, ks=[20])
+    adata.obs["CNA_ncorrs"] = res.ncorrs
+    return None
 
 
-def scArches_milo(
+def scArches_cna(
     adata: AnnData,
     embedding_reference: str = "atlas",
     diff_reference: str = "ctrl",
     sample_col: str = "sample_id",
-    annotation_col: str = "cell_annotation",
-    signif_alpha: float = 0.1,
+    signif_quantile: float = 0.9,
     outdir: str = None,
     harmonize_output: bool = True,
-    milo_design: str = "~ is_query",
     **kwargs,
 ):
-    r"""Worflow for OOR state detection with scArches embedding and Milo differential analysis.
+    r"""Worflow for OOR state detection with scArches embedding and CNA differential analysis.
 
     Parameters:
     ------------
@@ -71,14 +67,12 @@ def scArches_milo(
         Name of reference group in adata.obs['dataset_group'] to use for differential abundance analysis
     sample_col: str
         Name of column in adata.obs to use as sample ID
-    annotation_col: str
-        Name of column in adata.obs to use as annotation
-    signif_alpha: float
-        FDR threshold for differential abundance analysi (default: 0.1)
+    signif_quantile: float
+        quantile threshold for CNA ncorr (default: 0.9, top 10% probabilities are considered significant)
     outdir: str
         path to output directory (default: None)
-    milo_design: str
-        design formula for differential abundance analysis (the test variable is always 'is_query')
+    harmonize_output: bool
+        whether to harmonize output to match other methods (default: True)
     \**kwargs:
         extra arguments to embedding_scArches
     """
@@ -122,46 +116,47 @@ def scArches_milo(
                     "Saved scVI model doesn't match cells in reference dataset, running scVI and scArches embedding"
                 )
                 embedding_scArches(
-                    adata, ref_dataset=embedding_reference, outdir=outdir, batch_key=sample_col, **kwargs
+                    adata, ref_dataset=embedding_reference, outdir=outdir, batch_key="sample_id", **kwargs
                 )
         else:
-            embedding_scArches(adata, ref_dataset=embedding_reference, outdir=outdir, batch_key=sample_col, **kwargs)
+            embedding_scArches(adata, ref_dataset=embedding_reference, outdir=outdir, batch_key="sample_id", **kwargs)
 
     # remove embedding_reference from anndata if not needed anymore
     if diff_reference != embedding_reference:
         adata = adata[adata.obs["dataset_group"] != embedding_reference].copy()
 
-    # Make KNN graph for Milo neigbourhoods
+    # Pick K for CNA KNN graph
     n_controls = adata[adata.obs["dataset_group"] == diff_reference].obs[sample_col].unique().shape[0]
     n_querys = adata[adata.obs["dataset_group"] == "query"].obs[sample_col].unique().shape[0]
     #  Set max to 200 or memory explodes for large datasets
     k = min([(n_controls + n_querys) * 5, 200])
     sc.pp.neighbors(adata, use_rep="X_scVI", n_neighbors=k)
 
-    run_milo(adata, "query", diff_reference, sample_col=sample_col, annotation_col=annotation_col, design=milo_design)
+    run_cna(adata, "query", diff_reference, sample_col=sample_col)
+    assert "CNA_ncorrs" in adata.obs
 
     # Harmonize output
     if harmonize_output:
-        sample_adata = adata.uns["nhood_adata"].T.copy()
-        sample_adata.var["OOR_score"] = sample_adata.var["logFC"].copy()
-        sample_adata.var["OOR_signif"] = (
-            ((sample_adata.var["SpatialFDR"] < signif_alpha) & (sample_adata.var["logFC"] > 0)).astype(int).copy()
-        )
-        sample_adata.varm["groups"] = adata.obsm["nhoods"].T
+        sample_adata = AnnData(var=adata.obs)
+        sample_adata.var["OOR_score"] = sample_adata.var["CNA_ncorrs"]
+        quant_10perc = np.quantile(sample_adata.var["OOR_score"], signif_quantile)
+        sample_adata.var["OOR_signif"] = sample_adata.var["OOR_score"] >= quant_10perc
+        # sample_adata.varm["groups"] = csc_matrix(np.identity(sample_adata.n_vars))
         adata.uns["sample_adata"] = sample_adata.copy()
+
     return adata
 
 
-def scArches_atlas_milo_ctrl(adata: AnnData, **kwargs):
-    """Worflow for OOR state detection with scArches embedding and Milo differential analysis - ACR design."""
-    return scArches_milo(adata, embedding_reference="atlas", diff_reference="ctrl", **kwargs)
+# def scArches_atlas_meld_ctrl(adata: AnnData, **kwargs):
+#     """Worflow for OOR state detection with scArches embedding and MELD differential analysis - ACR design."""
+#     return scArches_meld(adata, embedding_reference="atlas", diff_reference="ctrl", **kwargs)
 
 
-def scArches_atlas_milo_atlas(adata: AnnData, **kwargs):
-    """Worflow for OOR state detection with scArches embedding and Milo differential analysis - AR design."""
-    return scArches_milo(adata, embedding_reference="atlas", diff_reference="atlas", **kwargs)
+# def scArches_atlas_meld_atlas(adata: AnnData, **kwargs):
+#     """Worflow for OOR state detection with scArches embedding and MELD differential analysis - AR design."""
+#     return scArches_meld(adata, embedding_reference="atlas", diff_reference="atlas", **kwargs)
 
 
-def scArches_ctrl_milo_ctrl(adata: AnnData, **kwargs):
-    """Worflow for OOR state detection with scArches embedding and Milo differential analysis - CR design."""
-    return scArches_milo(adata, embedding_reference="ctrl", diff_reference="ctrl", **kwargs)
+# def scArches_ctrl_meld_ctrl(adata: AnnData, **kwargs):
+#     """Worflow for OOR state detection with scArches embedding and MELD differential analysis - CR design."""
+#     return scArches_meld(adata, embedding_reference="ctrl", diff_reference="ctrl", **kwargs)

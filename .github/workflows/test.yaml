@@ -4,7 +4,7 @@ on:
     push:
         branches: [master]
     pull_request:
-        branches: [master]
+        branches: [master, devel]
 
 jobs:
     test:
@@ -25,7 +25,7 @@ jobs:
 
         steps:
             - uses: actions/checkout@v2
-            - uses: r-lib/actions/setup-r@v1
+            - uses: r-lib/actions/setup-r@v2
             - name: Set up Python ${{ matrix.python }}
               uses: actions/setup-python@v2
               with:
@@ -62,5 +62,8 @@ jobs:
             - name: Upload coverage
               env:
                   CODECOV_NAME: ${{ matrix.python }}-${{ matrix.os }}
-              run: |
-                  codecov --required --flags=unittests
+              #   run: |
+              #       codecov --required --flags=unittests
+              uses: codecov/codecov-action@v3
+              with:
+                  token: ${{secrets.CODECOV_TOKEN}}

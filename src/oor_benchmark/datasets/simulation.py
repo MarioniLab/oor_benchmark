@@ -1,7 +1,9 @@
 from typing import List, Union
 
 import numpy as np
+import scanpy as sc
 from anndata import AnnData
+from sklearn.neighbors import KNeighborsClassifier
 
 
 def _split_train_test(adata: AnnData, annotation_col: str = "leiden", test_frac: float = 0.2):
@@ -23,10 +25,12 @@ def simulate_query_reference(
     ctrl_batch: Union[List[str], None] = None,
     annotation_col: str = "leiden",
     query_annotation: Union[List[str], None] = None,
-    perturbation_type: str = "remove",
+    perturbation_type: Union[str, List[str]] = "remove",
     test_frac: float = 0.2,
-    DA_frac: float = 0.2,
+    # DA_frac: float = 0.2,
+    split_pc: int = 0,
     seed=42,
+    use_rep_shift: str = "X_scVI",
 ):
     """
     Split single-cell dataset in a atlas, control and query dataset.
@@ -56,12 +60,18 @@ def simulate_query_reference(
         will be removed from the samples in ctrl_batch (the fraction specified by DA_test)
         if equal to 'depletion' a fraction of the cells in population specified in query_annotation
         will be removed from the samples in query_batch (the fraction specified by DA_test)
+        if equal to shift, the query population will be shifted along a principal component
+
     test_frac:
         fraction of cells in each population to be included in the query group (only used if batch_col is None)
     DA_frac:
         the fraction of cells of query_annotation to keep in control if perturbation_type is 'expansion', or in query if perturbation_type is 'depletion'
+    split_pc:
+        index of PC to use for splitting (default: 0, using PC1) (only used if perturbation_type=shift)
     seed:
         random seed for sampling
+    use_rep_shift:
+        representation to use to find neighbors in atlas dataset for shift perturbation (default: 'X_scVI')
 
     Returns:
     --------
@@ -99,29 +109,63 @@ def simulate_query_reference(
         query_annotation = np.random.choice(adata.obs[annotation_col].unique(), size=1)
 
     #  Apply perturbation
-    if perturbation_type == "remove":
-        adata.obs.loc[(adata.obs[annotation_col].isin(query_annotation)), "is_train"] = 0
-        if ctrl_batch is not None:
-            adata.obs.loc[(adata.obs[annotation_col].isin(query_annotation)), "is_ctrl"] = 0
-
-    elif perturbation_type == "expansion":
-        for b in ctrl_batch:
-            query_pop_cells = adata.obs_names[
-                (adata.obs[batch_col] == b) & (adata.obs[annotation_col].isin(query_annotation))
-            ]
-            cells2remove = np.random.choice(query_pop_cells, size=int(np.round(len(query_pop_cells) * (1 - DA_frac))))
-            adata.obs.loc[cells2remove, "is_ctrl"] = 0
-
-    elif perturbation_type == "depletion":
-        for b in query_batch:
-            query_pop_cells = adata.obs_names[
-                (adata.obs[batch_col] == b) & (adata.obs[annotation_col].isin(query_annotation))
-            ]
-            cells2remove = np.random.choice(query_pop_cells, size=int(np.round(len(query_pop_cells) * (1 - DA_frac))))
-            adata.obs.loc[cells2remove, "is_query"] = 0
-
+    if isinstance(perturbation_type, str):
+        perturb_types = [perturbation_type] * len(query_annotation)
+    elif isinstance(perturbation_type, list):
+        assert len(perturbation_type) == len(
+            query_annotation
+        ), "If perturbation_type is a list, it should be the same length as query_annotation"
+        perturb_types = perturbation_type.copy()
     else:
-        raise ValueError("perturbation type should be one of 'remove' or 'perturb_pc'")
+        raise TypeError(
+            "perturbation_type should be a string or a list of strings of the same length as query_annotation"
+        )
+
+    perturb_annotations = query_annotation.copy()
+    oor_cells = []
+
+    for query_annotation, perturbation_type in zip(perturb_annotations, perturb_types):
+        if perturbation_type == "remove":
+            adata.obs.loc[(adata.obs[annotation_col] == query_annotation), "is_train"] = 0
+            if ctrl_batch is not None:
+                adata.obs.loc[(adata.obs[annotation_col] == query_annotation), "is_ctrl"] = 0
+            oor_cells_p = adata.obs_names[adata.obs[annotation_col] == query_annotation].tolist()
+            oor_cells.extend(oor_cells_p)
+
+        elif perturbation_type == "shift":
+            split_pop_cells = adata.obs_names[
+                (adata.obs[annotation_col] == query_annotation) & (adata.obs["is_train"] == 0)
+            ]
+            # Run PCA on perturbation population (just query dataset to avoid batch effects)
+            split_pop_adata = adata[adata.obs_names.isin(split_pop_cells)].copy()
+            sc.pp.normalize_per_cell(split_pop_adata)
+            sc.pp.log1p(split_pop_adata)
+            sc.pp.pca(split_pop_adata)
+            pc2split = split_pop_adata.obsm["X_pca"][:, split_pc]
+            test_size = int(np.round(len(split_pop_cells) * 0.5))
+            idx = np.argpartition(pc2split, test_size)
+            cells2remove = split_pop_cells[idx[:test_size]].values
+
+            # Find neighbors in atlas cells
+            split_pop_adata.obs["remove"] = split_pop_adata.obs_names.isin(cells2remove).astype(int)
+            split_pop_cells_atlas = adata.obs_names[
+                (adata.obs[annotation_col] == query_annotation) & (adata.obs["is_train"] == 1)
+            ]
+            X_train = adata[split_pop_cells].obsm[use_rep_shift]
+            Y_train = split_pop_adata.obs["remove"]
+            X_atlas = adata[split_pop_cells_atlas].obsm[use_rep_shift]
+
+            neigh = KNeighborsClassifier(n_neighbors=10)
+            neigh = neigh.fit(X_train, Y_train)
+            atlas_cells2remove = split_pop_cells_atlas[neigh.predict(X_atlas) == 1]
+
+            adata.obs.loc[cells2remove, "is_ctrl"] = 0
+            adata.obs.loc[atlas_cells2remove, "is_train"] = 0
+            oor_cells_p = adata.obs_names[(adata.obs["is_test"] == 1) & (adata.obs_names.isin(cells2remove))].tolist()
+            oor_cells.extend(oor_cells_p)
+
+        else:
+            raise ValueError("perturbation type should be one of 'remove' or 'shift'")
     adata.uns["perturbation"] = {
         "annotation_col": annotation_col,
         "batch_col": batch_col,
@@ -137,7 +181,10 @@ def simulate_query_reference(
     adata.obs["dataset_group"] = np.where(adata.obs["is_train"] == 1, "atlas", adata.obs["dataset_group"])
     adata = adata[adata.obs["dataset_group"] != "exclude"].copy()  # remove cells that are not in any group
 
-    adata.obs["OOR_state"] = (adata.obs[annotation_col].isin(query_annotation)).astype(int)
+    # if perturbation_type == "remove":
+    #     adata.obs["OOR_state"] = (adata.obs[annotation_col].isin(query_annotation)).astype(int)
+    # elif perturbation_type == "shift":
+    adata.obs["OOR_state"] = (adata.obs_names.isin(oor_cells)).astype(int)
 
     adata.obs["cell_annotation"] = adata.obs[annotation_col].copy()
     adata.obs["sample_id"] = adata.obs[batch_col].copy()
