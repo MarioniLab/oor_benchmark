@@ -23,8 +23,8 @@ def check_method(adata: AnnData):
     assert "OOR_score" in adata.uns["sample_adata"].var
     assert "OOR_signif" in adata.uns["sample_adata"].var
     assert all(adata.uns["sample_adata"].var["OOR_signif"].isin([0, 1]))
-    assert "groups" in adata.uns["sample_adata"].varm
-    assert isinstance(adata.uns["sample_adata"].varm["groups"], csc_matrix)
+    if "groups" in adata.uns["sample_adata"].varm:
+        assert isinstance(adata.uns["sample_adata"].varm["groups"], csc_matrix)
     return True
 
 
@@ -42,6 +42,7 @@ def sample_dataset():
     adata = sc.datasets.pbmc3k_processed()
     adata_raw = sc.datasets.pbmc3k()
     adata.X = adata_raw[adata.obs_names][:, adata.var_names].X.copy()
+    adata.obs["cell_annotation"] = adata.obs["louvain"].copy()
     # Split in samples and dataset group
     adata.obs["sample_id"] = np.random.choice([f"S{n}" for n in range(16)], size=adata.n_obs)
     adata.obs["dataset_group"] = np.nan
@@ -52,5 +53,4 @@ def sample_dataset():
     adata.obs["OOR_state"] = np.where(adata.obs["louvain"] == "B cells", 1, 0)
     remove_cells = adata.obs_names[(adata.obs["OOR_state"] == 1) & (adata.obs["dataset_group"] != "query")]
     adata = adata[~adata.obs_names.isin(remove_cells)].copy()
-    adata.obs["cell_annotation"] = adata.obs["louvain"].copy()
     return adata

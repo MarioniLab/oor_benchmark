@@ -1,64 +1,38 @@
 import logging
 import warnings
 
-import milopy
+import numpy as np
 import pandas as pd
-import scanpy as sc
+import scipy.stats
 import scvi
 from anndata import AnnData
 
 from ._latent_embedding import embedding_scArches
+from ._meld import run_meld
 
 # logger = logging.getLogger(__name__)
 #  Turn off deprecation warnings in scvi-tools
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
-def run_milo(
-    adata_design: AnnData,
-    query_group: str,
-    reference_group: str,
-    sample_col: str = "sample_id",
-    annotation_col: str = "cell_annotation",
-    design: str = "~ is_query",
-):
-    """Test differential abundance analysis on neighbourhoods with Milo.
-
-    Parameters:
-    ------------
-    adata_design : AnnData
-        AnnData object of disease and reference cells to compare
-    query_group : str
-        Name of query group in adata_design.obs['dataset_group']
-    reference_group : str
-        Name of reference group in adata_design.obs['dataset_group']
-    sample_col : str
-        Name of column in adata_design.obs to use as sample ID
-    annotation_cols : str
-        Name of column in adata_design.obs to use as annotation
-    design : str
-        Design formula for differential abundance analysis (the test variable is always 'is_query')
-    """
-    milopy.core.make_nhoods(adata_design, prop=0.1)
-    milopy.core.count_nhoods(adata_design, sample_col=sample_col)
-    milopy.utils.annotate_nhoods(adata_design[adata_design.obs["dataset_group"] == reference_group], annotation_col)
-    adata_design.obs["is_query"] = adata_design.obs["dataset_group"] == query_group
-    milopy.core.DA_nhoods(adata_design, design=design)
+# def _run_wilcoxon(adata, OOR_state, diff_reference: str = "ctrl"):
+#     query_densities = adata[(adata['OOR_state'] == OOR_state) & (adata['dataset_group'] == 'query')]['sample_density'].values
+#     ctrl_densities = adata[(adata['OOR_state'] == OOR_state) & (adata['dataset_group'] == 'ctrl')]['sample_density'].values
+#     return(scipy.stats.ranksums(query_densities, ctrl_densities))
 
 
-def scArches_milo(
+def scArches_meld(
     adata: AnnData,
     embedding_reference: str = "atlas",
     diff_reference: str = "ctrl",
     sample_col: str = "sample_id",
-    annotation_col: str = "cell_annotation",
+    # signif_quantile: float = 0.9,
     signif_alpha: float = 0.1,
     outdir: str = None,
     harmonize_output: bool = True,
-    milo_design: str = "~ is_query",
     **kwargs,
 ):
-    r"""Worflow for OOR state detection with scArches embedding and Milo differential analysis.
+    r"""Worflow for OOR state detection with scArches embedding and MELD differential analysis.
 
     Parameters:
     ------------
@@ -71,14 +45,12 @@ def scArches_milo(
         Name of reference group in adata.obs['dataset_group'] to use for differential abundance analysis
     sample_col: str
         Name of column in adata.obs to use as sample ID
-    annotation_col: str
-        Name of column in adata.obs to use as annotation
     signif_alpha: float
-        FDR threshold for differential abundance analysi (default: 0.1)
+        Significance threshold for wilcoxon rank-sum test (default: 0.1)
     outdir: str
         path to output directory (default: None)
-    milo_design: str
-        design formula for differential abundance analysis (the test variable is always 'is_query')
+    harmonize_output: bool
+        whether to harmonize output to match other methods (default: True)
     \**kwargs:
         extra arguments to embedding_scArches
     """
@@ -122,46 +94,62 @@ def scArches_milo(
                     "Saved scVI model doesn't match cells in reference dataset, running scVI and scArches embedding"
                 )
                 embedding_scArches(
-                    adata, ref_dataset=embedding_reference, outdir=outdir, batch_key=sample_col, **kwargs
+                    adata, ref_dataset=embedding_reference, outdir=outdir, batch_key="sample_id", **kwargs
                 )
         else:
-            embedding_scArches(adata, ref_dataset=embedding_reference, outdir=outdir, batch_key=sample_col, **kwargs)
+            embedding_scArches(adata, ref_dataset=embedding_reference, outdir=outdir, batch_key="sample_id", **kwargs)
 
     # remove embedding_reference from anndata if not needed anymore
     if diff_reference != embedding_reference:
         adata = adata[adata.obs["dataset_group"] != embedding_reference].copy()
 
-    # Make KNN graph for Milo neigbourhoods
+    # Pick K for MELD KNN graph
     n_controls = adata[adata.obs["dataset_group"] == diff_reference].obs[sample_col].unique().shape[0]
     n_querys = adata[adata.obs["dataset_group"] == "query"].obs[sample_col].unique().shape[0]
     #  Set max to 200 or memory explodes for large datasets
-    k = min([(n_controls + n_querys) * 5, 200])
-    sc.pp.neighbors(adata, use_rep="X_scVI", n_neighbors=k)
+    k = min([(n_controls + n_querys) * 3, 200])
 
-    run_milo(adata, "query", diff_reference, sample_col=sample_col, annotation_col=annotation_col, design=milo_design)
+    run_meld(adata, "query", diff_reference, sample_col=sample_col, n_neighbors=k)
+
+    # Run wilcoxon test
+    query_samples = adata.obs[sample_col][adata.obs["dataset_group"] == "query"].unique().tolist()
+    reference_samples = adata.obs[sample_col][adata.obs["dataset_group"] == diff_reference].unique().tolist()
+
+    pvals = []
+    statistics = []
+    for _, c in adata.obsm["sample_densities"].iterrows():
+        statistic, pval = scipy.stats.ranksums(c[query_samples].values, c[reference_samples].values)
+        pvals.append(pval)
+        statistics.append(statistic)
+
+    wilcox_df = pd.DataFrame(
+        np.vstack([np.array(pvals), np.array(statistics)]).T, columns=["wilcox_pval", "wilcox_stat"]
+    )
+    wilcox_df.index = adata.obs_names
+    adata.obs = pd.concat([adata.obs, wilcox_df], 1)
 
     # Harmonize output
     if harmonize_output:
-        sample_adata = adata.uns["nhood_adata"].T.copy()
-        sample_adata.var["OOR_score"] = sample_adata.var["logFC"].copy()
-        sample_adata.var["OOR_signif"] = (
-            ((sample_adata.var["SpatialFDR"] < signif_alpha) & (sample_adata.var["logFC"] > 0)).astype(int).copy()
-        )
-        sample_adata.varm["groups"] = adata.obsm["nhoods"].T
+        sample_adata = AnnData(var=adata.obs, varm=adata.obsm)
+        sample_adata.var["OOR_score"] = sample_adata.var["wilcox_stat"]
+        # quant_10perc = np.quantile(sample_adata.var["OOR_score"], signif_quantile)
+        sample_adata.var["OOR_signif"] = sample_adata.var["wilcox_pval"] < signif_alpha
+        # sample_adata.varm["groups"] = csc_matrix(np.identity(sample_adata.n_vars))
         adata.uns["sample_adata"] = sample_adata.copy()
+
     return adata
 
 
-def scArches_atlas_milo_ctrl(adata: AnnData, **kwargs):
-    """Worflow for OOR state detection with scArches embedding and Milo differential analysis - ACR design."""
-    return scArches_milo(adata, embedding_reference="atlas", diff_reference="ctrl", **kwargs)
+def scArches_atlas_meld_ctrl(adata: AnnData, **kwargs):
+    """Worflow for OOR state detection with scArches embedding and MELD differential analysis - ACR design."""
+    return scArches_meld(adata, embedding_reference="atlas", diff_reference="ctrl", **kwargs)
 
 
-def scArches_atlas_milo_atlas(adata: AnnData, **kwargs):
-    """Worflow for OOR state detection with scArches embedding and Milo differential analysis - AR design."""
-    return scArches_milo(adata, embedding_reference="atlas", diff_reference="atlas", **kwargs)
+def scArches_atlas_meld_atlas(adata: AnnData, **kwargs):
+    """Worflow for OOR state detection with scArches embedding and MELD differential analysis - AR design."""
+    return scArches_meld(adata, embedding_reference="atlas", diff_reference="atlas", **kwargs)
 
 
-def scArches_ctrl_milo_ctrl(adata: AnnData, **kwargs):
-    """Worflow for OOR state detection with scArches embedding and Milo differential analysis - CR design."""
-    return scArches_milo(adata, embedding_reference="ctrl", diff_reference="ctrl", **kwargs)
+def scArches_ctrl_meld_ctrl(adata: AnnData, **kwargs):
+    """Worflow for OOR state detection with scArches embedding and MELD differential analysis - CR design."""
+    return scArches_meld(adata, embedding_reference="ctrl", diff_reference="ctrl", **kwargs)
