@@ -1,5 +1,6 @@
 # Benchmarking out-of-reference detection
 
+[![DOI](https://zenodo.org/badge/540036198.svg)](https://zenodo.org/badge/latestdoi/540036198)
 [![Tests][badge-tests]][link-tests]
 [![Documentation][badge-docs]][link-docs]
 
