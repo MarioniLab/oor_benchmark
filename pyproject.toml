@@ -25,10 +25,12 @@ dependencies = [
     "anndata",
     "scanpy",
     "scvi-tools",
+    "rpy2<=3.5.12",
     "milopy @ git+https://github.com/emdann/milopy.git@master",
-    "sklearn",
+    "scikit-learn",
     "meld",
-    "cna"
+    "cna",
+    "multianndata",
     ]
 
 [project.optional-dependencies]
