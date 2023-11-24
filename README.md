@@ -38,7 +38,7 @@ conda activate oor-benchmark-env
 2. Install R and R dependencies
 
 ```bash
-conda install conda-forge::r-base==4.0.5 bioconda::bioconductor-edger==3.32.1 conda-forge::r-statmod==1.4.37
+conda install conda-forge::r-base==4.0.5 bioconda::bioconductor-edger conda-forge::r-statmod
 ```
 
 <!--
