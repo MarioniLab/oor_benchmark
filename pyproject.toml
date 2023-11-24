@@ -29,7 +29,8 @@ dependencies = [
     "milopy @ git+https://github.com/emdann/milopy.git@master",
     "scikit-learn",
     "meld",
-    "cna"
+    "cna",
+    "multianndata",
     ]
 
 [project.optional-dependencies]
