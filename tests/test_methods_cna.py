@@ -1,3 +1,4 @@
+import pytest
 import numpy as np
 
 from oor_benchmark.api import check_method, sample_dataset
